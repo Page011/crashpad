@@ -1,0 +1,139 @@
+/* Screenshots tab. --shot (tile width) is set from cfg.shotSize by shots.js. */
+section[data-pane="shots"] { position: relative; --shot: 220px; }
+
+/* ---------- toolbar ---------- */
+section[data-pane="shots"] .shots-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+section[data-pane="shots"] .size { display: flex; align-items: center; gap: 6px; flex: 0 1 190px; min-width: 90px; color: var(--muted); }
+section[data-pane="shots"] .size span { display: grid; flex: none; }
+section[data-pane="shots"] .size input { flex: 1; min-width: 0; padding: 0; border: 0; background: none; accent-color: var(--accent); }
+section[data-pane="shots"] .size svg, section[data-pane="shots"] .snip svg { width: 16px; height: 16px; }
+section[data-pane="shots"] .snip { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
+section[data-pane="shots"] .snip span { display: grid; }
+
+/* ---------- tiles: grid wraps and scrolls down, row scrolls across ---------- */
+section[data-pane="shots"] .strip {
+  flex: 1; min-height: 0; overflow: auto; outline: none; padding: 8px 6px 10px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--shot), 100%), 1fr));
+  gap: 12px; align-content: start;
+}
+section[data-pane="shots"] .strip.row { display: flex; align-items: center; overflow: auto hidden; }
+section[data-pane="shots"] .strip.row .tile { flex: none; height: min(100%, calc(var(--shot) * .625)); }
+section[data-pane="shots"] .strip .empty { grid-column: 1 / -1; flex: 1; }
+
+section[data-pane="shots"] .tile {
+  position: relative; margin: 0; aspect-ratio: 16 / 10; border-radius: var(--r-md); overflow: clip;
+  cursor: pointer; scroll-margin: 12px;
+  /* contain: letterboxing and transparency sit on a subtle checkerboard */
+  background: repeating-conic-gradient(var(--surface) 0 25%, var(--surface-2) 0 50%) 50% / 16px 16px;
+  outline: 2px solid transparent; outline-offset: 2px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+  /* motion via translate/shadow only at rest, so text in screenshots stays crisp */
+  transition: translate .24s var(--ease), box-shadow .24s var(--ease), outline-color .15s,
+              scale .4s var(--spring), rotate .4s var(--spring);
+}
+section[data-pane="shots"] .strip.cover .tile { background: var(--surface); }
+section[data-pane="shots"] .tile img {
+  display: block; width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none;
+}
+section[data-pane="shots"] .strip.cover .tile img { object-fit: cover; }
+/* fades out as quick look lifts it; snaps back (no transition) when the zoom lands on it */
+section[data-pane="shots"] .tile.looking img { opacity: 0; transition: opacity .12s; }
+
+section[data-pane="shots"] .tile:hover {
+  translate: 0 -3px; box-shadow: 0 14px 28px -12px rgb(0 0 0 / .65), 0 3px 8px rgb(0 0 0 / .25);
+}
+section[data-pane="shots"] .tile:active { translate: 0 -1px; transition-duration: .08s; }
+section[data-pane="shots"] .tile[aria-selected="true"] { outline-color: var(--accent); }
+/* picked up for a drag out: floats above the rest */
+section[data-pane="shots"] .tile.lift {
+  z-index: 2; cursor: grabbing; scale: 1.04; rotate: -1.2deg; translate: 0 -8px;
+  box-shadow: 0 30px 54px -18px rgb(0 0 0 / .75), 0 10px 22px -10px rgb(0 0 0 / .5);
+  transition-duration: .3s;
+}
+
+section[data-pane="shots"] .tile figcaption {
+  position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px; pointer-events: none;
+  font-size: .75em; color: #fff; background: rgb(0 0 0 / .55); backdrop-filter: blur(6px);
+  opacity: 0; translate: 0 4px; transition: opacity .18s, translate .18s var(--ease);
+}
+section[data-pane="shots"] .tile:hover figcaption,
+section[data-pane="shots"] .tile[aria-selected="true"] figcaption { opacity: 1; translate: 0 0; }
+
+/* ---------- one-shot animations (keyframes are named shot-<class>; shots.js removes the class) ---------- */
+section[data-pane="shots"] .badge {
+  position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; pointer-events: none; opacity: 0;
+  color: #fff; background: var(--accent); box-shadow: 0 8px 24px rgb(0 0 0 / .35);
+}
+section[data-pane="shots"] .badge svg { width: 24px; height: 24px; }
+section[data-pane="shots"] .copied .badge { animation: shot-copied .8s var(--ease); }
+section[data-pane="shots"] .tile.copied { animation: shot-ring .6s ease-out; }
+section[data-pane="shots"] .tile.new { animation: shot-new .55s cubic-bezier(.2, .8, .25, 1) backwards; }
+section[data-pane="shots"] .tile.sent { animation: shot-sent .5s var(--ease); }
+
+@keyframes shot-copied {
+  0% { opacity: 0; scale: .5; }
+  22% { opacity: 1; scale: 1.08; }
+  36% { scale: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; scale: .96; }
+}
+@keyframes shot-ring {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); }
+  to { box-shadow: 0 0 0 14px transparent; }
+}
+@keyframes shot-new {
+  0% { opacity: 0; translate: 0 -18px; }
+  60% { opacity: 1; translate: 0 3px; }
+  100% { translate: 0 0; }
+}
+@keyframes shot-sent {
+  0% { scale: 1.04; rotate: -1.2deg; translate: 0 -8px; }
+  45% { scale: .97; rotate: 0deg; translate: 0 2px; opacity: .6; }
+  100% { scale: 1; translate: 0 0; opacity: 1; }
+}
+
+/* ---------- quick look ---------- */
+section[data-pane="shots"] .ql { position: absolute; inset: 0; z-index: 5; }
+section[data-pane="shots"] .ql-dim {
+  position: absolute; inset: 0; border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(10px) saturate(1.2);
+}
+section[data-pane="shots"] .ql-img {
+  position: absolute; left: 10px; top: 10px; width: calc(100% - 20px); height: calc(100% - 50px);
+  object-fit: contain; cursor: pointer; -webkit-user-drag: none;
+  filter: drop-shadow(0 16px 32px rgb(0 0 0 / .5));
+  transition: scale .4s var(--spring), rotate .4s var(--spring), translate .4s var(--spring);
+}
+section[data-pane="shots"] .ql-img.lift { cursor: grabbing; scale: 1.02; rotate: -.6deg; translate: 0 -6px; }
+section[data-pane="shots"] .ql-cap {
+  position: absolute; left: 14px; right: 14px; bottom: 10px; height: 26px;
+  display: flex; align-items: center; justify-content: center; gap: 10px; white-space: nowrap; font-size: .85em;
+}
+section[data-pane="shots"] .ql-cap > * { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+section[data-pane="shots"] .ql-cap b { font-weight: 600; }
+section[data-pane="shots"] .ql-cap span { color: var(--muted); flex: 0 1 auto; }
+section[data-pane="shots"] .ql .icon-btn {
+  position: absolute; border-radius: 50%; opacity: .8; transition: opacity .15s;
+  background: color-mix(in srgb, var(--bg) 65%, transparent);
+}
+section[data-pane="shots"] .ql .icon-btn:hover { opacity: 1; }
+section[data-pane="shots"] .ql .icon-btn:disabled { opacity: 0; pointer-events: none; }
+section[data-pane="shots"] .ql-prev { left: 8px; top: calc(50% - 34px); }
+section[data-pane="shots"] .ql-next { right: 8px; top: calc(50% - 34px); }
+section[data-pane="shots"] .ql-x { right: 8px; top: 8px; }
+
+/* narrow side docks: icon-only snip, tighter tiles */
+@container pane (max-width: 420px) {
+  section[data-pane="shots"] .snip .lbl { display: none; }
+  section[data-pane="shots"] .strip { gap: 10px; }
+}
+/* wide / popped out: give the enlarged image room clear of the arrows */
+@container pane (min-width: 640px) {
+  section[data-pane="shots"] .ql-img { left: 48px; width: calc(100% - 96px); top: 14px; height: calc(100% - 58px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  section[data-pane="shots"] .tile { transition-property: outline-color, box-shadow; }
+  section[data-pane="shots"] .tile.new, section[data-pane="shots"] .tile.sent { animation: none; }
+}

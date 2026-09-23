@@ -1,0 +1,133 @@
+/* Settings pane. Everything scoped under the pane. */
+section[data-pane=settings] .set-wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+
+section[data-pane=settings] .set-nav { display: flex; gap: 4px; flex: none; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+section[data-pane=settings] .set-scroll { position: relative; flex: 1; padding: 0 4px 28px 1px; outline: none; }
+
+section[data-pane=settings] .set-group + .set-group { margin-top: 18px; }
+section[data-pane=settings] .set-group h3 {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 7px 6px;
+  font-size: .72em; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+}
+section[data-pane=settings] .set-group h3 svg { width: 14px; height: 14px; }
+section[data-pane=settings] .set-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+
+section[data-pane=settings] .set-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  min-height: 44px; padding: 8px 12px;
+}
+section[data-pane=settings] .set-row:not([hidden]) ~ .set-row { border-top: 1px solid var(--line); }
+section[data-pane=settings] .set-label { flex: 1 1 150px; min-width: 0; font-size: .92em; }
+section[data-pane=settings] .set-label small { display: block; color: var(--muted); font-size: .86em; }
+section[data-pane=settings] .set-label output { margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+section[data-pane=settings] .set-row > input[type=range] { flex: 0 1 210px; min-width: 120px; }
+section[data-pane=settings] .set-row > input[type=text], section[data-pane=settings] .set-inline { flex: 0 1 270px; min-width: 150px; }
+section[data-pane=settings] .set-inline { display: flex; align-items: center; gap: 4px; }
+section[data-pane=settings] .set-inline input { flex: 1; }
+section[data-pane=settings] .keys { display: flex; gap: 4px; }
+
+/* segmented control */
+section[data-pane=settings] .seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: 10px; background: var(--surface-2); }
+section[data-pane=settings] .seg-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 0; border-radius: 8px;
+  background: none; color: var(--muted); font-size: .85em; white-space: nowrap;
+  transition: background-color .2s var(--ease), color .2s, box-shadow .2s;
+}
+section[data-pane=settings] .seg-btn:hover { color: var(--fg); }
+section[data-pane=settings] .seg-btn.on { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+section[data-pane=settings] .seg-btn svg { width: 14px; height: 14px; }
+
+/* theme presets: a tiny island face over a colourful "wallpaper", so translucency shows */
+section[data-pane=settings] :is(.swatches, .styles) { flex: 1 1 100%; display: grid; gap: 8px; }
+section[data-pane=settings] .swatches { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+section[data-pane=settings] .swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border: 0;
+  border-radius: var(--r-md); background: none; color: var(--muted); font-size: .76em;
+  transition: background-color .15s, color .15s;
+}
+section[data-pane=settings] .swatch:hover, section[data-pane=settings] .swatch.on { color: var(--fg); }
+section[data-pane=settings] .swatch:hover { background: var(--hover); }
+section[data-pane=settings] .sw-face {
+  --c: color-mix(in srgb, var(--sw-bg) var(--sw-a), transparent);
+  position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 10; border-radius: 10px;
+  background: linear-gradient(var(--c), var(--c)), linear-gradient(135deg, #ff8a7a, #7a6cff 55%, #3fd6a4);
+  color: var(--sw-fg); box-shadow: inset 0 0 0 1px rgb(128 128 128 / .3);
+  transition: box-shadow .2s, scale .3s var(--spring);
+}
+section[data-pane=settings] .sw-face[data-m=glass] { box-shadow: inset 0 1px 0 rgb(255 255 255 / .6), inset 0 0 0 1px rgb(255 255 255 / .3); }
+section[data-pane=settings] .sw-face b { font-size: 1.2em; font-weight: 600; }
+section[data-pane=settings] .sw-face i { position: absolute; right: 7px; bottom: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--sw-ac); }
+section[data-pane=settings] .swatch:hover .sw-face { scale: 1.05; }
+section[data-pane=settings] .swatch.on .sw-face { box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 1px rgb(128 128 128 / .3); }
+
+section[data-pane=settings] .wells { display: flex; gap: 14px; }
+section[data-pane=settings] .well { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .74em; color: var(--muted); cursor: pointer; }
+
+/* edge picker: a mini screen with 4 edges + 4 corners */
+section[data-pane=settings] .edge-pick {
+  position: relative; flex: none; width: 176px; height: 110px; border-radius: 10px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 30%, transparent), var(--surface-2));
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+section[data-pane=settings] .edge-spot {
+  position: absolute; padding: 0; border: 0; border-radius: 99px;
+  background: color-mix(in srgb, var(--fg) 30%, transparent);
+  transition: background-color .15s, scale .3s var(--spring), box-shadow .2s;
+}
+section[data-pane=settings] .edge-spot::after { content: ""; position: absolute; inset: -7px; } /* bigger hit area */
+section[data-pane=settings] .edge-spot:hover { background: color-mix(in srgb, var(--fg) 60%, transparent); scale: 1.12; }
+section[data-pane=settings] .edge-spot.on { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+section[data-pane=settings] .edge-spot:is([data-pos=top], [data-pos=bottom]) { left: calc(50% - 22px); width: 44px; height: 7px; }
+section[data-pane=settings] .edge-spot:is([data-pos=left], [data-pos=right]) { top: calc(50% - 17px); width: 7px; height: 34px; }
+section[data-pane=settings] .edge-spot[data-pos*="-"] { width: 16px; height: 16px; border-radius: 5px; }
+section[data-pane=settings] .edge-spot:is([data-pos=top], [data-pos^=top-]) { top: 7px; }
+section[data-pane=settings] .edge-spot:is([data-pos=bottom], [data-pos^=bottom-]) { bottom: 7px; }
+section[data-pane=settings] .edge-spot:is([data-pos=left], [data-pos$="-left"]) { left: 7px; }
+section[data-pane=settings] .edge-spot:is([data-pos=right], [data-pos$="-right"]) { right: 7px; }
+
+/* dock style cards: each draws its collapsed look; hovering plays the open motion with the live curve */
+section[data-pane=settings] .styles { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+section[data-pane=settings] .style-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 6px 7px; border: 0;
+  border-radius: var(--r-md); background: var(--surface); color: var(--muted); font-size: .78em;
+  transition: background-color .15s, color .15s, box-shadow .2s;
+}
+section[data-pane=settings] .style-card:hover { background: var(--surface-2); color: var(--fg); }
+section[data-pane=settings] .style-card.on { color: var(--fg); box-shadow: 0 0 0 2px var(--accent); }
+section[data-pane=settings] .mini {
+  position: relative; display: block; width: 100%; height: 46px; border-radius: 7px; overflow: hidden;
+  background: linear-gradient(160deg, #6d86f7, #a86fc0 60%, #e39aa0);
+}
+section[data-pane=settings] .mini i {
+  position: absolute; left: 50%; top: 4px; translate: -50% 0; width: 36%; height: 8px; border-radius: 99px;
+  background: var(--bg); box-shadow: 0 0 0 .5px rgb(255 255 255 / .25);
+  transition: width var(--dur) var(--spring-close), height var(--dur) var(--spring-close), border-radius var(--dur) var(--spring-close);
+}
+section[data-pane=settings] .mini[data-s=notch] i { top: 0; width: 40%; border-radius: 0 0 7px 7px; }
+section[data-pane=settings] .mini[data-s=fade] i {
+  top: 0; width: 50%; height: 6px; border-radius: 0 0 6px 6px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent);
+}
+section[data-pane=settings] .mini[data-s=line] i { top: 3px; width: 42%; height: 3px; }
+section[data-pane=settings] .mini[data-s=dot] i { width: 8px; }
+section[data-pane=settings] .mini[data-s=invisible] i { background: transparent; box-shadow: none; outline: 1px dashed rgb(255 255 255 / .7); }
+section[data-pane=settings] .style-card:is(:hover, :focus-visible) .mini i {
+  width: 80%; height: 32px; border-radius: 8px; -webkit-mask-image: none;
+  background: var(--bg); outline-color: transparent;
+  transition-timing-function: var(--spring);
+}
+section[data-pane=settings] .style-card:is(:hover, :focus-visible) .mini:is([data-s=notch], [data-s=fade]) i { border-radius: 0 0 8px 8px; }
+
+/* roomy (popped out): section list on the left */
+@container pane (min-width: 640px) {
+  section[data-pane=settings] .set-wrap { flex-direction: row; gap: 14px; }
+  section[data-pane=settings] .set-nav { flex-direction: column; width: 150px; overflow: visible; }
+  section[data-pane=settings] .set-nav .chip { justify-content: flex-start; height: 30px; border-radius: var(--r-sm); background: none; color: var(--muted); }
+  section[data-pane=settings] .set-nav .chip:hover { background: var(--hover); color: var(--fg); }
+  section[data-pane=settings] .set-nav .chip.on { background: var(--surface-2); color: var(--fg); }
+}
+/* narrow (side docks): controls get their own line */
+@container pane (max-width: 420px) {
+  section[data-pane=settings] .set-row > :is(input[type=range], input[type=text], select, .set-inline, .seg) { flex: 1 1 100%; }
+  section[data-pane=settings] .edge-pick { margin: 0 auto; }
+}

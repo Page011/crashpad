@@ -1,0 +1,374 @@
+/* crashpad island: the docked shape, its materials, the peek / alert cards and open-close motion.
+   Driven by body[data-edge|data-orient|data-style|data-anim|data-material], body.ready/.detached/
+   .fullscreen/.has-due, .island.open/.peeking/.alerting/.dropping and the vars app.js sets.
+   Placement must match dock.rs layout(): panel at --gap from its edge(s), centred on a free axis.
+   Private vars are --i-*. */
+
+@property --i-fx { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@property --i-fy { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+
+/* ---------- where: per edge ----------
+   --i-ax/--i-ay: anchor on each axis (0 start, .5 centre, 1 end); --i-jc/--i-ai: the same as flex
+   alignment; --i-in/--i-inx: gradient direction away from the edge; --i-q1..4: corners (tl tr br bl)
+   that touch a screen edge. */
+body {
+  --i-ax: .5; --i-ay: 0; --i-jc: flex-start; --i-ai: center; --i-in: to bottom; --i-inx: to right;
+  --i-q1: 1; --i-q2: 1; --i-q3: 0; --i-q4: 0;
+}
+body[data-edge=bottom] { --i-ay: 1; --i-jc: flex-end; --i-in: to top; --i-q1: 0; --i-q2: 0; --i-q3: 1; --i-q4: 1; }
+body[data-edge=left] { --i-ax: 0; --i-ay: .5; --i-jc: center; --i-ai: flex-start; --i-in: to right; --i-q2: 0; --i-q4: 1; }
+body[data-edge=right] { --i-ax: 1; --i-ay: .5; --i-jc: center; --i-ai: flex-end; --i-in: to left; --i-q1: 0; --i-q3: 1; }
+body[data-edge=top-left] { --i-ax: 0; --i-ai: flex-start; --i-q4: 1; }
+body[data-edge=top-right] { --i-ax: 1; --i-ai: flex-end; --i-inx: to left; --i-q3: 1; }
+body[data-edge=bottom-left] { --i-ax: 0; --i-ay: 1; --i-jc: flex-end; --i-ai: flex-start; --i-in: to top; --i-q2: 0; --i-q3: 1; --i-q4: 1; }
+body[data-edge=bottom-right] { --i-ax: 1; --i-ay: 1; --i-jc: flex-end; --i-ai: flex-end; --i-in: to top; --i-inx: to left; --i-q1: 0; --i-q3: 1; --i-q4: 1; }
+
+/* ---------- what: collapsed shape per style (length along the edge x thickness) ---------- */
+body {
+  --i-cl: var(--pill-l); --i-ct: var(--pill-t); --i-cr: calc(var(--pill-t) / 2);
+  --i-pw: min(var(--panel-w), 340px); --i-ph: max(var(--pill-t), 36px); --i-pr: calc(var(--i-ph) / 2);
+  --i-aw: min(var(--panel-w), 360px);
+}
+body[data-edge*='-'] { --i-cl: max(calc(var(--pill-t) * 1.6), calc(var(--pill-l) * .45)); } /* tucked into a corner */
+body[data-style=notch] { --i-cr: min(calc(var(--pill-t) * .45), 16px); }
+body[data-style=notch][data-edge*='-'] { --i-cr: min(calc(var(--pill-t) * .6), 18px); }
+body[data-style=fade] { --i-cl: calc(var(--pill-l) * 1.5); --i-ct: clamp(4px, calc(var(--pill-t) / 4), 10px); --i-cr: 0px; }
+body[data-style=fade][data-edge*='-'] { --i-cl: max(28px, var(--pill-t)); --i-ct: var(--i-cl); }
+body[data-style=line] { --i-ct: clamp(3px, calc(var(--pill-t) / 6), 6px); --i-cr: calc(var(--i-ct) / 2); }
+body[data-style=dot] { --i-cl: clamp(8px, calc(var(--pill-t) * .45), 18px); --i-ct: var(--i-cl); --i-cr: 50%; }
+body { --i-cw: var(--i-cl); --i-ch: var(--i-ct); }
+body[data-orient=vertical] {
+  --i-cw: var(--i-ct); --i-ch: var(--i-cl);
+  --i-pw: min(var(--panel-w), 220px); --i-ph: 84px; --i-pr: 20px; --i-aw: min(var(--panel-w), 280px);
+}
+
+/* ---------- materials ---------- */
+body {
+  --i-surf: var(--bg); --i-tint: transparent; --i-rim: none; --i-sheen: none; --i-bezel: none;
+  --i-glow: color-mix(in srgb, var(--fg) 70%, var(--accent));
+}
+body[data-material=translucent] { --i-surf: color-mix(in srgb, var(--bg) var(--alpha, 100%), transparent); }
+/* under the backdrop: what shows until the first capture arrives */
+body:is([data-material=frosted], [data-material=glass]) { --i-surf: color-mix(in srgb, var(--bg) 45%, transparent); }
+body[data-material=frosted] {
+  --i-tint: color-mix(in srgb, var(--bg) var(--alpha, 52%), transparent); /* Opacity setting */
+  --i-rim: inset 0 0 0 1px rgb(255 255 255 / .08), inset 0 1px 0 rgb(255 255 255 / .12);
+  --i-sheen: linear-gradient(rgb(255 255 255 / .05), transparent 40%);
+}
+body[data-material=glass] {
+  --i-tint: color-mix(in srgb, var(--bg) var(--alpha, 16%), transparent); /* Opacity setting */
+  --i-rim: inset 0 1px 1px rgb(255 255 255 / .6), inset 0 -1px 1px rgb(255 255 255 / .18),
+    inset 0 0 0 1px rgb(255 255 255 / .16), inset 0 0 22px rgb(255 255 255 / .09);
+  --i-sheen: radial-gradient(120% 60% at 50% 0%, rgb(255 255 255 / .22), transparent 62%),
+    linear-gradient(150deg, rgb(255 255 255 / .14), transparent 38%, transparent 70%, rgb(255 255 255 / .08));
+}
+/* flush styles sit on the edge (like dock.rs) with the corners that touch it square */
+body:is([data-style=notch], [data-style=fade]):not(.detached) {
+  --gap: 0px;
+  --i-k1: calc(1 - var(--i-q1)); --i-k2: calc(1 - var(--i-q2)); --i-k3: calc(1 - var(--i-q3)); --i-k4: calc(1 - var(--i-q4));
+  --i-bezel: linear-gradient(var(--i-in), rgb(0 0 0 / .4), transparent 18px);
+}
+
+/* ---------- the island ---------- */
+.island {
+  position: absolute; z-index: 1; margin: auto; inset: var(--gap) 0 auto; /* top; other edges below */
+  box-sizing: border-box; overflow: hidden; isolation: isolate;
+  /* the collapsed alert card is the only in-flow child: it sizes the island and stays on the anchor */
+  display: flex; flex-direction: column; justify-content: var(--i-jc); align-items: var(--i-ai);
+  interpolate-size: allow-keywords; anchor-name: --island;
+  width: var(--i-cw); height: var(--i-ch); --i-R: var(--i-cr);
+  border-radius: calc(var(--i-k1, 1) * var(--i-R)) calc(var(--i-k2, 1) * var(--i-R))
+    calc(var(--i-k3, 1) * var(--i-R)) calc(var(--i-k4, 1) * var(--i-R));
+  background-color: var(--i-surf); color: var(--fg);
+  box-shadow: 0 3px 12px -3px rgb(0 0 0 / .4);
+  outline: 0 solid transparent; outline-offset: -2px;
+  /* motion: the shape morphs (size, radius, fade masks); timings are tuned per data-anim below.
+     --i-md/--i-mt/--i-mdl morph duration/curve/delay, --i-od/--i-ot opacity, --i-cd/--i-cdl content */
+  --i-md: var(--dur); --i-mt: var(--spring-close); --i-mdl: 0s;
+  --i-od: calc(var(--dur) * .5); --i-ot: var(--ease);
+  --i-cd: var(--dur); --i-cdl: calc(var(--dur) * .14);
+  transition: width var(--i-md) var(--i-mt) var(--i-mdl), height var(--i-md) var(--i-mt) var(--i-mdl),
+    border-radius var(--i-md) var(--i-mt) var(--i-mdl),
+    --i-fx var(--i-md) var(--i-mt) var(--i-mdl), --i-fy var(--i-md) var(--i-mt) var(--i-mdl),
+    opacity var(--i-od) var(--i-ot), background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    outline-width .15s var(--ease);
+}
+body[data-edge=bottom] .island { inset: auto 0 var(--gap); }
+body[data-edge=left] .island { inset: 0 auto 0 var(--gap); }
+body[data-edge=right] .island { inset: 0 var(--gap) 0 auto; }
+body[data-edge=top-left] .island { inset: var(--gap) auto auto var(--gap); }
+body[data-edge=top-right] .island { inset: var(--gap) var(--gap) auto auto; }
+body[data-edge=bottom-left] .island { inset: auto auto var(--gap) var(--gap); }
+body[data-edge=bottom-right] .island { inset: auto var(--gap) var(--gap) auto; }
+
+.island.peeking { width: var(--i-pw); height: var(--i-ph); --i-R: var(--i-pr); }
+.island.alerting:not(.open) { width: var(--i-aw); height: fit-content; --i-R: 22px; box-shadow: 0 12px 34px -10px rgb(0 0 0 / .55); }
+.island.open {
+  width: var(--panel-w); height: var(--panel-h); --i-R: var(--radius);
+  box-shadow: 0 20px 50px -16px rgb(0 0 0 / .6), 0 4px 16px -6px rgb(0 0 0 / .35);
+}
+.island:is(.open, .peeking, .alerting) { --i-mt: var(--spring); } /* growing springs, shrinking settles */
+.island.dropping { outline-width: 2px; outline-color: var(--accent); }
+
+/* collapsed looks (pill and notch are the defaults above) */
+body[data-style=fade] .island:not(.open, .peeking, .alerting) { background-color: var(--i-glow); box-shadow: none; --i-fx: 30%; --i-fy: 100%; }
+body[data-style=line] .island:not(.open, .peeking, .alerting) { background-color: color-mix(in srgb, var(--fg) 80%, transparent); box-shadow: 0 0 0 .5px rgb(0 0 0 / .3); }
+body[data-style=invisible]:not(.detached) .island:not(.open, .peeking, .alerting),
+body.fullscreen:not(.detached) .island:not(.open, .alerting) { opacity: 0; box-shadow: none; }
+
+/* fade: a sliver glowing out of the edge, its ends (and inner side) melting into the screen */
+body[data-style=fade]:not(.detached) .island {
+  mask-image: linear-gradient(90deg, transparent, #000 var(--i-fx), #000 calc(100% - var(--i-fx)), transparent),
+    linear-gradient(var(--i-in), #000 calc(100% - var(--i-fy)), transparent);
+  mask-composite: intersect;
+}
+body[data-style=fade][data-orient=vertical]:not(.detached) .island {
+  mask-image: linear-gradient(180deg, transparent, #000 var(--i-fx), #000 calc(100% - var(--i-fx)), transparent),
+    linear-gradient(var(--i-in), #000 calc(100% - var(--i-fy)), transparent);
+}
+body[data-style=fade][data-edge*='-']:not(.detached) .island {
+  mask-image: linear-gradient(var(--i-inx), #000 calc(100% - 2 * var(--i-fx)), transparent),
+    linear-gradient(var(--i-in), #000 calc(100% - var(--i-fy)), transparent);
+}
+
+/* ---------- animation styles ---------- */
+body[data-anim=smooth] .island, body[data-anim=zoom] .island, body[data-anim=slide] .island { --i-mt: var(--ease); }
+body[data-anim=snappy] .island { --i-mt: var(--ease); --i-md: calc(var(--dur) * .55); --i-cd: calc(var(--dur) * .55); --i-cdl: calc(var(--dur) * .05); }
+/* fade: no morph. The size swaps at the midpoint while opacity dips through 0: the closed island
+   rests at .995 so these extrapolating curves (1 -> .995 x200, .995 -> 1 x-199) hit exactly 0. */
+body[data-anim=fade] .island {
+  opacity: .995; --i-md: 0s; --i-mdl: calc(var(--dur) / 2); --i-od: var(--dur);
+  --i-ot: linear(0, 200 45%, 200 55%, 1); --i-cd: calc(var(--dur) / 2); --i-cdl: calc(var(--dur) / 2);
+}
+body[data-anim=fade] .island:is(.open, .peeking, .alerting) { opacity: 1; --i-ot: linear(0, -199 45%, -199 55%, 1); }
+/* to / from fully hidden: hide in the first half, show in the second */
+body[data-anim=fade]:is([data-style=invisible], .fullscreen) .island { --i-ot: linear(0, 1 45%, 1); }
+body[data-anim=fade]:is([data-style=invisible], .fullscreen) .island:is(.open, .peeking, .alerting) { --i-ot: linear(0, 0 55%, 1); }
+
+/* where content comes from while it reveals */
+body { --i-from: scale(.96); }
+body[data-anim=zoom] { --i-from: scale(.5); }
+body[data-anim=slide] { --i-from: translate(calc((2 * var(--i-ax) - 1) * 36px), calc((2 * var(--i-ay) - 1) * 36px)); }
+body[data-anim=fade] { --i-from: scale(.97); }
+
+/* ---------- contents: fixed size, pinned to the island's anchor, revealed just after the shape ---------- */
+.island > :is(.panel, .peek, .backdrop) {
+  position: absolute; left: calc(var(--i-ax) * 100%); top: calc(var(--i-ay) * 100%);
+  translate: calc(var(--i-ax) * -100%) calc(var(--i-ay) * -100%);
+}
+.island > :is(.panel, .peek, .alert) {
+  opacity: 0; visibility: hidden; pointer-events: none; filter: blur(6px);
+  transform: var(--i-from); transform-origin: calc(var(--i-ax) * 100%) calc(var(--i-ay) * 100%);
+  transition: opacity .14s var(--ease), filter .14s var(--ease), transform .22s var(--ease), visibility 0s .22s;
+}
+.island.open > .panel, .island.peeking:not(.open, .alerting) > .peek, .island.alerting > .alert {
+  opacity: 1; visibility: visible; pointer-events: auto; filter: none; transform: none;
+  transition: opacity calc(var(--i-cd) * .55) var(--ease) var(--i-cdl), filter calc(var(--i-cd) * .55) var(--ease) var(--i-cdl),
+    transform var(--i-cd) var(--i-mt) var(--i-cdl), visibility 0s;
+}
+.island > .panel { z-index: 2; box-sizing: border-box; width: var(--panel-w); height: var(--panel-h); }
+
+.island > .peek {
+  z-index: 2; box-sizing: border-box; width: var(--i-pw); height: var(--i-ph); padding: 0 18px;
+  line-height: var(--i-ph); font-size: .88em; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.peek > b { color: var(--accent); font-weight: 600; margin-right: 6px; }
+body[data-orient=vertical] .island > .peek {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+  padding: 12px 14px; line-height: 1.35; white-space: normal; text-align: start; overflow-wrap: anywhere;
+}
+body[data-orient=vertical] .peek > b { display: block; margin: 0 0 2px; }
+
+/* alert: a card growing out of the collapsed island; a banner on top when the panel is open */
+.island > .alert {
+  position: relative; z-index: 3; flex: none; box-sizing: border-box; width: var(--i-aw);
+  display: flex; flex-direction: column; gap: 3px; padding: 14px 16px 12px; text-align: start;
+}
+.alert > :not(.alert-actions) {
+  margin: 0; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+}
+.alert > :first-child { font-weight: 600; -webkit-line-clamp: 1; }
+.alert > :not(:first-child, .alert-actions) { color: var(--muted); font-size: .9em; }
+.alert > .alert-text { display: flex; flex-direction: column; gap: 2px; font-weight: 400; } /* shell markup: b title + span text */
+.alert-text > b { font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.alert-text > span { color: var(--muted); font-size: .9em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.alert-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.alert-actions button {
+  font: inherit; font-size: .84em; color: var(--fg); background: var(--hover); border: 0; border-radius: 999px;
+  padding: 5px 13px; cursor: pointer; transition: background-color .15s var(--ease), scale .15s var(--ease);
+}
+.alert-actions button:hover { background: var(--sel); }
+.alert-actions button.icon-btn { padding: 0; width: 28px; height: 28px; display: grid; place-items: center; flex: none; }
+.alert-actions button:active { scale: .96; }
+.alert-actions button:is(.primary, .btn) { background: var(--accent); color: #fff; }
+.alert-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.island.open > .alert {
+  position: absolute; z-index: 5; top: 10px; left: 50%; translate: -50% 0; width: min(420px, calc(100% - 24px));
+  border-radius: 16px; background: color-mix(in srgb, var(--bg) 86%, var(--fg));
+  box-shadow: 0 12px 32px -10px rgb(0 0 0 / .6), inset 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent);
+  --i-from: translateY(-12px) scale(.98); transform-origin: 50% 0;
+}
+
+/* ---------- material layers ---------- */
+/* frosted / glass: the screen behind the window (dock.rs "backdrop" event), window-sized plus --bd-m
+   on every side and pinned to the window origin whatever the island's size, anchor or state */
+.island > .backdrop {
+  display: none; z-index: 0; pointer-events: none;
+  width: calc(100vw + 2 * var(--bd-m, 0px)); height: calc(100vh + 2 * var(--bd-m, 0px));
+  --i-bo: calc(var(--gap) + var(--bd-m, 0px)); /* island's offset from the window, plus the margin */
+  margin: calc((2 * var(--i-ay) - 1) * var(--i-bo)) 0 0 calc((2 * var(--i-ax) - 1) * var(--i-bo));
+  background: var(--backdrop, none) 0 0 / 100% 100% no-repeat;
+  transition: opacity var(--dur) var(--ease);
+}
+body:is([data-material=frosted], [data-material=glass]) .island > .backdrop { display: block; }
+body[data-material=frosted] .island > .backdrop { filter: blur(var(--blur, 28px)) saturate(1.8); }
+body[data-material=glass] .island > .backdrop { filter: url(#glass-lens) blur(calc(var(--blur, 28px) / 6)) saturate(1.7) brightness(1.08); }
+body[data-material=glass] .island.open { --i-tint: color-mix(in srgb, var(--bg) max(var(--alpha, 16%), 30%), transparent); } /* legible text */
+
+/* tint, sheen, rim light, and the flush drawer's edge melting into the bezel */
+.island::before {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: inherit;
+  background-color: var(--i-tint); background-image: var(--i-sheen); box-shadow: var(--i-rim);
+  transition: background-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.island.open::before { background-image: var(--i-bezel), var(--i-sheen); }
+body:is([data-style=fade], [data-style=line]) .island:not(.open, .peeking, .alerting) > .backdrop,
+body:is([data-style=fade], [data-style=line]) .island:not(.open, .peeking, .alerting)::before { opacity: 0; }
+
+/* has-due: accent dot on the collapsed pill / notch; line, fade and dot light up instead */
+.island::after {
+  content: ''; position: absolute; z-index: 4; inset: 0; pointer-events: none; border-radius: inherit;
+  background: var(--accent); opacity: 0; transition: opacity .3s var(--ease);
+}
+body[data-style=dot] .island::after { inset: 27%; border-radius: 50%; }
+body:is([data-style=pill], [data-style=notch]) .island::after {
+  inset: auto; width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 6px var(--accent);
+  top: calc(50% - 3px); right: max(6px, calc(var(--i-ct) / 2 - 3px));
+}
+body:is([data-style=pill], [data-style=notch])[data-edge$=right] .island::after { right: auto; left: max(6px, calc(var(--i-ct) / 2 - 3px)); }
+body[data-orient=vertical]:is([data-style=pill], [data-style=notch]) .island::after {
+  top: auto; right: auto; left: calc(50% - 3px); bottom: max(6px, calc(var(--i-ct) / 2 - 3px));
+}
+body.has-due:not([data-style=invisible]) .island:not(.open, .peeking, .alerting)::after { opacity: 1; }
+
+/* ---------- toast (core.js toast(), inside the open panel) ---------- */
+.island > .toast {
+  position: absolute; z-index: 6; left: auto; right: 14px; bottom: 12px; max-width: min(360px, calc(100% - 28px));
+  white-space: normal; text-overflow: clip; /* wrap: notices and errors must be readable in full */
+  box-sizing: border-box; padding: 5px 12px; border-radius: 14px; background: var(--accent); color: #fff;
+  font-size: .8em; pointer-events: none; opacity: 0; translate: 0 6px;
+  transition: opacity .2s var(--ease), translate .2s var(--ease);
+}
+.island > .toast.show { opacity: 1; translate: 0 0; }
+.island > .toast.err { background: var(--danger, #ff453a); }
+
+/* ---------- popped out: the island is the window (inset for the shadow) ---------- */
+body.detached .island {
+  inset: 10px; margin: 0; width: auto; height: auto; opacity: 1; transition: none; mask: none;
+  --i-R: var(--radius); box-shadow: 0 4px 10px -1px rgb(0 0 0 / .5), 0 0 0 1px rgb(255 255 255 / .07);
+}
+body.detached .island > .panel {
+  inset: 0; width: auto; height: auto; translate: none;
+  opacity: 1; visibility: visible; pointer-events: auto; filter: none; transform: none; transition: none;
+}
+body.detached .island > .backdrop {
+  left: 0; top: 0; translate: none;
+  margin: calc(-10px - var(--bd-m, 0px)) 0 0 calc(-10px - var(--bd-m, 0px));
+}
+body.detached .island::after { display: none; }
+
+/* ---------- notch shoulders: concave fillets where the notch meets the bezel ---------- */
+/* body::after follows the island through anchor positioning (so no transform on .island) */
+@supports (anchor-name: --a) {
+  body[data-style=notch]:is([data-edge=top], [data-edge=bottom], [data-edge=left], [data-edge=right]):is([data-material=opaque], [data-material=translucent]):not(.detached)::after {
+    content: ''; position: absolute; z-index: 1; pointer-events: none; position-anchor: --island;
+    --i-s: min(10px, calc(var(--pill-t) / 3));
+    --i-c: transparent calc(var(--i-s) - .6px), var(--i-surf) var(--i-s);
+    background-size: var(--i-s) var(--i-s); background-repeat: no-repeat;
+    transition: opacity .3s var(--ease);
+  }
+  body[data-edge=top]::after {
+    top: 0; height: var(--i-s); left: calc(anchor(left) - var(--i-s)); right: calc(anchor(right) - var(--i-s));
+    background-image: radial-gradient(circle at 0 100%, var(--i-c)), radial-gradient(circle at 100% 100%, var(--i-c));
+    background-position: 0 0, 100% 0;
+  }
+  body[data-edge=bottom]::after {
+    bottom: 0; height: var(--i-s); left: calc(anchor(left) - var(--i-s)); right: calc(anchor(right) - var(--i-s));
+    background-image: radial-gradient(circle at 0 0, var(--i-c)), radial-gradient(circle at 100% 0, var(--i-c));
+    background-position: 0 0, 100% 0;
+  }
+  body[data-edge=left]::after {
+    left: 0; width: var(--i-s); top: calc(anchor(top) - var(--i-s)); bottom: calc(anchor(bottom) - var(--i-s));
+    background-image: radial-gradient(circle at 100% 0, var(--i-c)), radial-gradient(circle at 100% 100%, var(--i-c));
+    background-position: 0 0, 0 100%;
+  }
+  body[data-edge=right]::after {
+    right: 0; width: var(--i-s); top: calc(anchor(top) - var(--i-s)); bottom: calc(anchor(bottom) - var(--i-s));
+    background-image: radial-gradient(circle at 0 0, var(--i-c)), radial-gradient(circle at 0 100%, var(--i-c));
+    background-position: 0 0, 0 100%;
+  }
+  body.fullscreen::after { opacity: 0; }
+}
+
+/* ---------- boot and reduced motion ---------- */
+/* until app.js has applied the config: nothing shows, nothing animates (then the island fades in) */
+body:not(.ready) .island { opacity: 0 !important; }
+body:not(.ready) .island, body:not(.ready) .island > *, body:not(.ready) .island::before,
+body:not(.ready) .island::after, body:not(.ready)::after { transition: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .island, .island > *, .island::before, .island::after, body::after {
+    transition-duration: 1ms !important; transition-delay: 0s !important;
+  }
+}
+
+/* ---------- pill activity (activity.js): a compact live status while collapsed ----------
+   #activity holds the content; activity.js sets --i-al (its length) on the island and toggles
+   .island.activity. Open, peek and alert states win; only pill and notch have room for it. */
+.island { --i-al: 0px; }
+body { --i-amax: min(var(--panel-w), max(calc(var(--i-cl) * 2.4), 220px)); }
+body[data-orient=vertical] { --i-amax: min(var(--panel-h), max(calc(var(--i-cl) * 2.4), 160px)); }
+.island > .activity {
+  position: absolute; z-index: 2; left: calc(var(--i-ax) * 100%); top: calc(var(--i-ay) * 100%);
+  translate: calc(var(--i-ax) * -100%) calc(var(--i-ay) * -100%);
+  display: flex; align-items: center; gap: 8px; box-sizing: border-box;
+  width: max-content; max-width: var(--i-amax); height: var(--i-ch); padding: 0 8px;
+  font-size: .8em; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+  opacity: 0; visibility: hidden; pointer-events: none; filter: blur(4px);
+  transform: scale(.9); transform-origin: calc(var(--i-ax) * 100%) calc(var(--i-ay) * 100%);
+  transition: opacity .14s var(--ease), filter .14s var(--ease), transform .22s var(--ease), visibility 0s .22s;
+}
+body:is([data-style=pill], [data-style=notch]):not(.detached, .fullscreen) .island.activity:not(.open, .peeking, .alerting) {
+  --i-mt: var(--spring); width: clamp(var(--i-cw), var(--i-al), var(--i-amax));
+}
+body:is([data-style=pill], [data-style=notch]):not(.detached, .fullscreen) .island.activity:not(.open, .peeking, .alerting) > .activity {
+  opacity: 1; visibility: visible; filter: none; transform: none;
+  transition: opacity calc(var(--i-cd) * .55) var(--ease) var(--i-cdl), filter calc(var(--i-cd) * .55) var(--ease) var(--i-cdl),
+    transform var(--i-cd) var(--i-mt) var(--i-cdl), visibility 0s;
+}
+body[data-style] .island.activity:not(.open, .peeking, .alerting)::after { opacity: 0; } /* the has-due dot would sit on the bars */
+.activity > .act-art { flex: none; width: 22px; height: 22px; border-radius: 6px; object-fit: cover; box-shadow: 0 1px 3px rgb(0 0 0 / .4); }
+.activity > .act-ico { display: inline-grid; place-items: center; flex: none; color: var(--accent); }
+.activity > .act-ico svg { width: 16px; height: 16px; }
+.activity > .act-timer { color: var(--warn); }
+.activity > .act-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.activity > .act-when { flex: none; color: var(--muted); font-weight: 500; }
+.act-eq { display: flex; align-items: flex-end; gap: 2px; flex: none; height: 14px; }
+.act-eq > i { width: 3px; height: 100%; border-radius: 2px; background: var(--accent); transform-origin: bottom; animation: act-eq .75s ease-in-out infinite alternate; }
+.act-eq > i:nth-child(2) { animation-delay: -.35s; }
+.act-eq > i:nth-child(3) { animation-delay: -.6s; }
+.act-eq > i:nth-child(4) { animation-delay: -.2s; }
+.act-eq.paused > i { animation: none; transform: scaleY(.3); }
+@keyframes act-eq { from { transform: scaleY(.22); } to { transform: scaleY(1); } }
+/* side docks: a short stacked form */
+body[data-orient=vertical] .island > .activity { flex-direction: column; width: var(--i-cw); height: max-content; max-width: none; max-height: var(--i-amax); padding: 8px 0; gap: 6px; }
+body[data-orient=vertical]:is([data-style=pill], [data-style=notch]):not(.detached, .fullscreen) .island.activity:not(.open, .peeking, .alerting) {
+  width: var(--i-cw); height: clamp(var(--i-ch), var(--i-al), var(--i-amax));
+}
+body[data-orient=vertical] .activity > :is(.act-text, .act-when) { writing-mode: vertical-rl; max-height: 120px; }
+body[data-orient=vertical] .activity[data-kind=reminder] > .act-text { display: none; }
+body[data-orient=vertical] .act-eq { flex-direction: column; align-items: center; height: auto; width: 14px; }
+body[data-orient=vertical] .act-eq > i { width: 100%; height: 3px; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .act-eq > i { animation: none; transform: scaleY(.6); } }

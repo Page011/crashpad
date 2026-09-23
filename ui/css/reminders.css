@@ -1,0 +1,136 @@
+/* Reminders tab (ui/reminders.js). Every rule is scoped to the pane; keyframes are rm-*. */
+section[data-pane="reminders"] {
+  position: relative; /* anchors the hidden date-time picker */
+  gap: 8px;
+
+  .rm-ic { display: inline-grid; place-items: center; flex: none; }
+  .rm-ic svg { width: 14px; height: 14px; }
+
+  /* ---------- add bar ---------- */
+  .rm-add { display: flex; flex-direction: column; gap: 7px; flex: none; }
+  .rm-field {
+    display: flex; align-items: center; gap: 8px; min-height: 38px; box-sizing: border-box;
+    padding: 3px 4px 3px 11px; border-radius: var(--r-md);
+    background: var(--surface); border: 1px solid var(--line);
+    transition: border-color .15s, box-shadow .2s var(--ease);
+  }
+  .rm-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .rm-field > .rm-ic { color: var(--muted); }
+  .rm-input { flex: 1; min-width: 0; padding: 6px 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; }
+  .rm-when {
+    display: inline-flex; align-items: center; gap: 4px; flex: none; white-space: nowrap;
+    padding: 2px 2px 2px 8px; border-radius: 999px; font-size: .8em; font-variant-numeric: tabular-nums;
+    background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg);
+    animation: rm-pop-in .25s var(--ease);
+  }
+  .rm-when:empty { display: none; }
+  .rm-when .icon-btn { width: 20px; height: 20px; border-radius: 50%; }
+  .rm-when .icon-btn svg { width: 12px; height: 12px; }
+  .rm-go { flex: none; transition: background .15s, color .15s; }
+  .rm-field.has-text .rm-go { background: var(--accent); color: #fff; }
+  .rm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rm-chips .chip { display: inline-flex; align-items: center; gap: 5px; }
+  .rm-dt { position: absolute; left: 0; top: 0; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+
+  /* ---------- list ---------- */
+  .rm-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 1px; padding-bottom: 6px; }
+  .rm-head {
+    display: flex; align-items: center; gap: 6px; flex: none; margin: 10px 8px 3px;
+    font-size: .72em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  }
+  .rm-head:first-child { margin-top: 2px; }
+  .rm-count { font-weight: 500; opacity: .7; }
+  .rm-head.rm-overdue { color: var(--danger); }
+  .rm-fold {
+    display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; cursor: pointer;
+    color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit;
+  }
+  .rm-fold:hover { color: var(--fg); }
+  .rm-fold svg { width: 14px; height: 14px; transition: rotate .2s var(--ease); }
+  .rm-fold[aria-expanded="true"] svg { rotate: 90deg; }
+  .rm-clear { margin-left: auto; font-size: calc(var(--fs) * .78); text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+  .rm-row {
+    display: flex; align-items: center; gap: 10px; flex: none;
+    padding: 7px 6px 7px 9px; border-radius: var(--r-md); outline: none;
+    transition: background .15s;
+  }
+  .rm-row:hover { background: var(--hover); }
+  .rm-row[aria-selected="true"] { background: var(--sel); }
+  .rm-row:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .rm-new { animation: rm-in .35s var(--ease) both; }
+
+  /* round checkbox: fills, the tick draws itself, the circle pops */
+  .rm-check {
+    flex: none; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; cursor: pointer;
+    border-radius: 50%; border: 1.6px solid color-mix(in srgb, var(--fg) 40%, transparent);
+    background: transparent; color: var(--accent);
+    transition: background .2s var(--ease), border-color .2s var(--ease), color .2s;
+  }
+  .rm-check svg { width: 12px; height: 12px; stroke-width: 3; stroke-dasharray: 30; stroke-dashoffset: 30; transition: stroke-dashoffset .3s var(--ease) .06s; }
+  .rm-check:hover { border-color: var(--accent); }
+  .rm-check:hover svg { stroke-dashoffset: 0; opacity: .5; }
+  .overdue .rm-check { border-color: color-mix(in srgb, var(--danger) 75%, transparent); }
+  .done .rm-check, .rm-checking .rm-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .done .rm-check svg, .rm-checking .rm-check svg { stroke-dashoffset: 0; opacity: 1; }
+  .rm-checking .rm-check { animation: rm-pop .4s var(--ease); }
+  .rm-checking { animation: rm-out .22s var(--ease) .3s forwards; }
+
+  .rm-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .rm-text { flex: 1; min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }
+  /* strike-through that sweeps across (each wrapped line gets its own) */
+  .rm-text span {
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 55% / 0 1.5px;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    transition: background-size .35s var(--ease), color .35s;
+  }
+  .done .rm-text span, .rm-checking .rm-text span { background-size: 100% 1.5px; color: var(--muted); }
+  .rm-edit { flex: 1; min-width: 0; margin: -4px 0; padding: 3px 8px; }
+  .rm-due { flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: .78em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .overdue .rm-due { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+
+  .rm-actions { display: flex; gap: 2px; flex: none; opacity: 0; transition: opacity .15s; }
+  .rm-row:hover .rm-actions, .rm-row:focus-within .rm-actions, .rm-row[aria-selected="true"] .rm-actions, .rm-actions:has(.rm-confirm) { opacity: 1; }
+  .rm-confirm {
+    border: 0; border-radius: 999px; padding: 4px 10px; cursor: pointer;
+    font: inherit; font-size: .78em; background: var(--danger); color: #fff;
+    animation: rm-pop-in .2s var(--ease);
+  }
+  .empty .muted { margin-top: 4px; font-size: .9em; }
+
+  /* ---------- snooze menu (popover, top layer) ---------- */
+  .rm-menu {
+    position: fixed; inset: auto; margin: 0; padding: 4px; min-width: 160px; box-sizing: border-box;
+    border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-float);
+    background: color-mix(in srgb, var(--bg) 92%, var(--fg)); color: var(--fg); font-size: .9em;
+  }
+  .rm-menu:popover-open { display: flex; flex-direction: column; animation: rm-pop-in .16s var(--ease); }
+  .rm-menu-title { padding: 4px 10px 2px; font-size: .75em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .rm-menu button { padding: 6px 10px; border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .rm-menu button:hover, .rm-menu button:focus-visible { background: var(--hover); outline: none; }
+
+  .rm-hint { display: none; flex: none; font-size: .75em; text-align: center; }
+
+  /* popped out / big panel: a centred column with room to breathe */
+  @container pane (min-width: 640px) {
+    & > .rm-add, & > .rm-list, & > .rm-hint { width: min(100%, 760px); align-self: center; }
+    .rm-hint { display: block; }
+    .rm-row { padding-block: 9px; }
+  }
+  /* side docks: due time under the text, time chip wraps below the input */
+  @container pane (max-width: 420px) {
+    .rm-body { flex-direction: column; align-items: flex-start; gap: 3px; }
+    .rm-field { flex-wrap: wrap; }
+    .rm-input { min-width: 8em; }
+    .rm-when { order: 1; }
+  }
+}
+
+@keyframes rm-in { from { opacity: 0; translate: 0 -6px; } }
+@keyframes rm-out { to { opacity: 0; translate: 14px 0; } }
+@keyframes rm-pop { 40% { scale: 1.22; } }
+@keyframes rm-pop-in { from { opacity: 0; scale: .92; } }
+
+@media (prefers-reduced-motion: reduce) {
+  section[data-pane="reminders"] * { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}

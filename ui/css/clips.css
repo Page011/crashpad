@@ -1,0 +1,96 @@
+/* Clipboard tab (ui/clips.js). Every rule is scoped to the pane. */
+section[data-pane="clipboard"] { gap: 8px; }
+
+/* ---- search + filters ---- */
+section[data-pane="clipboard"] .clips-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+section[data-pane="clipboard"] .clips-search { flex: 1 1 180px; min-width: 0; position: relative; display: flex; align-items: center; }
+section[data-pane="clipboard"] .clips-search-icon {
+  position: absolute; left: 9px; display: grid; color: var(--muted); pointer-events: none;
+}
+section[data-pane="clipboard"] .clips-search-icon svg { width: 15px; height: 15px; }
+section[data-pane="clipboard"] .clips-q { flex: 1; min-width: 0; padding-left: 30px; }
+section[data-pane="clipboard"] .clips-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+section[data-pane="clipboard"] .clips-clear { margin-left: 6px; transition: background-color .15s var(--ease), color .15s var(--ease); }
+section[data-pane="clipboard"] .clips-clear.armed { background: var(--danger); color: #fff; }
+section[data-pane="clipboard"] .clips-clear:disabled { opacity: .4; pointer-events: none; }
+
+/* ---- list ---- */
+section[data-pane="clipboard"] .clips-list {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px;
+  margin: 0 -4px; padding: 0 4px 4px;
+}
+section[data-pane="clipboard"] .clips-head {
+  padding: 10px 8px 2px; font-size: .7em; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+section[data-pane="clipboard"] .clips-head:first-child { padding-top: 2px; }
+
+section[data-pane="clipboard"] .clip {
+  --thumb-w: 84px; --thumb-h: 56px;
+  flex: none; display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: var(--r-md); cursor: pointer;
+  content-visibility: auto; contain-intrinsic-size: auto 52px; /* long histories stay cheap */
+  transition: background-color .15s var(--ease), scale .15s var(--ease);
+}
+section[data-pane="clipboard"] .clip:hover { background: var(--hover); }
+section[data-pane="clipboard"] .clip.sel { background: var(--sel); }
+section[data-pane="clipboard"] .clip:active { scale: .99; }
+
+section[data-pane="clipboard"] .clip-glyph {
+  flex: none; width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: var(--r-sm); background: var(--surface-2); color: var(--muted);
+}
+section[data-pane="clipboard"] .clip-glyph svg { width: 17px; height: 17px; }
+section[data-pane="clipboard"] .clip-thumb {
+  flex: none; width: var(--thumb-w); height: var(--thumb-h); object-fit: contain;
+  border-radius: var(--r-sm); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line);
+}
+
+section[data-pane="clipboard"] .clip-body { flex: 1; min-width: 0; }
+section[data-pane="clipboard"] .clip-text {
+  font-size: .92em; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+section[data-pane="clipboard"] .clip-meta {
+  margin-top: 2px; font-size: .74em; color: var(--muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+section[data-pane="clipboard"] .clip-acts { flex: none; display: flex; gap: 2px; }
+section[data-pane="clipboard"] .clip-acts .icon-btn { opacity: 0; transition: opacity .15s var(--ease), color .15s var(--ease); }
+section[data-pane="clipboard"] .clip:hover .icon-btn,
+section[data-pane="clipboard"] .clip.sel .icon-btn,
+section[data-pane="clipboard"] .clip.pinned .clip-pin { opacity: 1; }
+section[data-pane="clipboard"] .clip.pinned .clip-pin { color: var(--accent); }
+section[data-pane="clipboard"] .clip-acts .icon-btn:last-child:hover { color: var(--danger); }
+
+/* a new (or re-copied) clip slides in on top */
+@keyframes clips-in { from { opacity: 0; translate: 0 -8px; scale: .98; } }
+section[data-pane="clipboard"] .clip.enter { animation: clips-in .34s var(--ease); }
+
+section[data-pane="clipboard"] .clips-hint {
+  display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .72em; color: var(--muted);
+}
+
+/* ---- narrow (side docks): stack the bar, smaller thumbnails ---- */
+@container pane (max-width: 420px) {
+  section[data-pane="clipboard"] .clips-search { flex-basis: 100%; }
+  section[data-pane="clipboard"] .clips-filters { flex: 1; }
+  section[data-pane="clipboard"] .clips-clear { margin-left: auto; }
+  section[data-pane="clipboard"] .clip { --thumb-w: 64px; --thumb-h: 48px; gap: 8px; padding: 6px; }
+}
+
+/* ---- wide (popped out / big panel): roomier rows, bigger thumbnails, longer previews ---- */
+@container pane (min-width: 640px) {
+  section[data-pane="clipboard"] .clips-bar { flex-wrap: nowrap; }
+  section[data-pane="clipboard"] .clips-search { flex: 0 1 420px; }
+  section[data-pane="clipboard"] .clips-filters { flex: 1; }
+  section[data-pane="clipboard"] .clips-clear { margin-left: auto; }
+  section[data-pane="clipboard"] .clip { --thumb-w: 128px; --thumb-h: 80px; gap: 14px; padding: 8px 12px; }
+  section[data-pane="clipboard"] .clip-text { -webkit-line-clamp: 3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  section[data-pane="clipboard"] .clip.enter { animation: none; }
+  section[data-pane="clipboard"] .clip:active { scale: none; }
+}

@@ -1,0 +1,208 @@
+/* Notes tab: list (sidebar when wide, popover when narrow), editor, details footer, sketch overlay.
+   Wide = popped out / big panel (pane ≥ 640px); narrow = vertical side docks (≤ 420px). */
+section[data-pane="notes"] {
+  position: relative;
+
+  .nt { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; }
+  .nt-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+
+  /* ---------- header & toolbar ---------- */
+  .nt-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 2px 6px; }
+  .nt-titlebtn {
+    display: inline-flex; align-items: center; gap: 4px; flex: 1 1 120px; min-width: 0;
+    padding: 4px 8px; border: 0; border-radius: var(--r-sm); background: none; color: var(--fg);
+    font: inherit; font-weight: 600; text-align: left; cursor: pointer; transition: background .15s var(--ease);
+  }
+  .nt-titlebtn:hover, .nt-titlebtn[aria-expanded="true"] { background: var(--hover); }
+  .nt-titletext { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .nt-chev { display: inline-flex; color: var(--muted); transition: rotate .25s var(--ease); }
+  .nt-chev svg { width: 14px; height: 14px; }
+  .nt-titlebtn[aria-expanded="true"] .nt-chev { rotate: 180deg; }
+  .nt-tools { display: flex; align-items: center; gap: 2px; }
+  .nt-sidebtn, .nt-wide, .nt-created { display: none; }
+
+  /* ---------- notes list ---------- */
+  .nt-side { display: none; flex-direction: column; gap: 6px; min-height: 0; box-sizing: border-box; }
+  .nt-side-head { display: flex; align-items: center; gap: 2px; }
+  .nt-search { flex: 1; min-width: 0; }
+  .nt-list { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 1px; padding: 1px; }
+  .nt-sec {
+    padding: 10px 10px 4px; font-size: .7em; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .nt-sec:first-child { padding-top: 2px; }
+  .nt-row {
+    position: relative; flex: none; padding: 7px 10px; border-radius: var(--r-md); cursor: default; outline: none;
+    transition: background .15s var(--ease), scale .2s var(--ease);
+  }
+  .nt-row:hover { background: var(--hover); }
+  .nt-row:active { scale: .985; }
+  .nt-row[aria-selected="true"] { background: var(--sel); }
+  .nt-row:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+  .nt-row-title { display: flex; align-items: center; gap: 4px; font-weight: 600; min-width: 0; }
+  .nt-row-title > span:last-child, .nt-row-sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .nt-row-sub { font-size: .82em; color: var(--muted); }
+  .nt-row-sub time { margin-right: 6px; color: var(--fg); opacity: .7; }
+  .nt-pinmark { display: inline-flex; flex: none; color: var(--accent); }
+  .nt-pinmark svg { width: 12px; height: 12px; }
+  .nt-row-acts {
+    position: absolute; right: 6px; top: 50%; translate: 0 -50%; display: flex; gap: 2px;
+    border-radius: var(--r-sm); background: color-mix(in srgb, var(--bg) 88%, transparent);
+    opacity: 0; pointer-events: none; transition: opacity .15s var(--ease);
+  }
+  .nt-row:hover .nt-row-acts, .nt-row:focus-within .nt-row-acts, .nt-row-acts:has(.armed) { opacity: 1; pointer-events: auto; }
+  .nt-del.armed { color: var(--danger); background: color-mix(in srgb, var(--danger) 18%, transparent); }
+
+  /* narrow panes (and wide ones with the sidebar hidden): the list is a popover under the title */
+  .nt.pop .nt-side {
+    display: flex; position: absolute; z-index: 10; top: 38px; left: 0;
+    width: min(340px, 100%); max-height: calc(100% - 44px); padding: 8px;
+    background: linear-gradient(var(--surface), var(--surface)), var(--bg);
+    border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-float);
+    transform-origin: 24px 0; animation: nt-pop calc(var(--dur) * .7) var(--spring) both;
+  }
+  @keyframes nt-pop { from { opacity: 0; scale: .94; translate: 0 -6px; } }
+
+  /* ---------- the document ---------- */
+  .nt-scroll { flex: 1; min-height: 0; overflow: auto; }
+  .nt-doc {
+    position: relative; min-height: 100%; box-sizing: border-box; padding: 4px 12px 28px;
+    outline: none; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; line-height: 1.55;
+    user-select: text; -webkit-user-select: text; cursor: text; caret-color: var(--accent);
+  }
+  .nt-doc p, .nt-doc div { margin: 0; }
+  .nt-doc h1, .nt-doc h2, .nt-doc h3, .nt-doc h4 { margin: .5em 0 .15em; line-height: 1.25; font-weight: 650; }
+  .nt-doc h1 { font-size: 1.45em; }
+  .nt-doc h2 { font-size: 1.22em; }
+  .nt-doc h3, .nt-doc h4 { font-size: 1.06em; }
+  /* the first line is the note's title (as in Apple Notes); markdown stays plain */
+  .nt-doc > :is(p, div, h1, h2, h3):not(.raw):first-child, .nt-doc > .raw:first-child + :is(p, div, h1, h2, h3) {
+    margin: 2px 0 6px; font-size: 1.45em; font-weight: 700; line-height: 1.25; letter-spacing: -.01em;
+  }
+  .nt-doc.is-empty::before {
+    content: "New note"; position: absolute; left: 12px; top: 6px; pointer-events: none;
+    font-size: 1.45em; font-weight: 700; line-height: 1.25; color: var(--muted); opacity: .6;
+  }
+  .nt-doc ul, .nt-doc ol { margin: .1em 0; padding-left: 1.55em; }
+  .nt-doc li { margin: .08em 0; }
+  .nt-doc li::marker { color: var(--muted); }
+  .nt-doc blockquote { margin: .3em 0; padding: 1px 0 1px 12px; border-left: 3px solid var(--accent); color: var(--muted); }
+  .nt-doc code { font-family: "Cascadia Code", Consolas, ui-monospace, monospace; font-size: .9em; padding: 1px 5px; border-radius: 5px; background: var(--hover); }
+  .nt-doc pre {
+    margin: .35em 0; padding: 8px 12px; border-radius: var(--r-sm); background: var(--hover);
+    font: .9em/1.5 "Cascadia Code", Consolas, ui-monospace, monospace; white-space: pre; overflow-x: auto;
+  }
+  .nt-doc pre code { padding: 0; background: none; font-size: inherit; }
+  .nt-doc hr { margin: .7em 0; border: 0; border-top: 1px solid var(--line); }
+  .nt-doc a {
+    color: var(--accent); text-underline-offset: 2px;
+    text-decoration: underline color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .nt-doc.ctrl a { cursor: pointer; text-decoration-color: currentColor; }
+  .nt-doc img { max-width: 100%; border-radius: var(--r-sm); vertical-align: bottom; }
+  .nt-doc img:not([src]) { display: inline-block; min-width: 1.2em; min-height: 1.2em; outline: 1px dashed var(--line); } /* never loaded (absolute) */
+  /* raw HTML / front matter from other tools: kept verbatim, not editable here */
+  .nt-doc .raw { font: .85em/1.5 "Cascadia Code", Consolas, ui-monospace, monospace; color: var(--muted); }
+  .nt-doc div.raw { margin: .3em 0; padding: 4px 10px; border-radius: var(--r-sm); background: var(--hover); }
+  .nt-doc table { margin: .4em 0; border-collapse: collapse; white-space: normal; }
+  .nt-doc td, .nt-doc th { padding: 3px 8px; border: 1px solid var(--line); }
+
+  /* checklists: the box is drawn in the item's left gutter; clicking it toggles */
+  .nt-doc li[data-checked] { position: relative; list-style: none; transition: color .2s var(--ease); }
+  .nt-doc li[data-checked]::before {
+    content: ""; position: absolute; left: -1.45em; top: .24em; width: 1.05em; height: 1.05em; box-sizing: border-box;
+    border: 1.5px solid var(--muted); border-radius: 50%; cursor: pointer;
+    background: transparent center / 72% no-repeat;
+    transition: background-color .18s var(--ease), border-color .18s var(--ease);
+  }
+  .nt-doc li[data-checked]:hover::before { border-color: var(--accent); }
+  .nt-doc li[data-checked="true"] { color: var(--muted); text-decoration: line-through color-mix(in srgb, var(--muted) 70%, transparent); }
+  .nt-doc li[data-checked="true"]::before {
+    border-color: var(--accent); background-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+  }
+  .nt-doc li.nt-tick::before { animation: nt-tick .4s var(--spring); }
+  @keyframes nt-tick { 40% { scale: 1.25; } }
+
+  /* sketches */
+  .nt-doc figure.sketch {
+    position: relative; width: fit-content; max-width: 100%; margin: 6px 0; border-radius: var(--r-md);
+    cursor: pointer; user-select: none; outline: 1.5px dashed transparent; outline-offset: 3px;
+    transition: outline-color .15s var(--ease), background .15s var(--ease);
+  }
+  .nt-doc figure.sketch:hover, .nt-doc figure.sketch:focus-visible { outline-color: var(--line); background: var(--hover); }
+  .nt-doc figure.sketch img { display: block; border-radius: 0; }
+  .nt-doc figure.sketch::after {
+    content: "Edit"; position: absolute; top: 6px; right: 6px; padding: 1px 8px; border-radius: 99px;
+    font-size: .72em; background: var(--accent); color: #fff; opacity: 0; transition: opacity .15s var(--ease);
+  }
+  .nt-doc figure.sketch:hover::after, .nt-doc figure.sketch:focus-visible::after { opacity: 1; }
+
+  /* ---------- details footer ---------- */
+  .nt-foot {
+    display: flex; gap: 6px; padding: 5px 10px 0; border-top: 1px solid var(--line);
+    font-size: .74em; color: var(--muted); white-space: nowrap; overflow: hidden;
+  }
+  .nt-foot > span + span::before { content: "·"; margin-right: 6px; }
+
+  /* ---------- wide: sidebar, full toolbar, created date ---------- */
+  @container pane (min-width: 640px) {
+    .nt:not(.noside) .nt-side {
+      display: flex; position: static; width: clamp(200px, 30%, 290px); max-height: none; flex: none;
+      padding: 0 10px 0 0; margin-right: 10px; border: 0; border-right: 1px solid var(--line); border-radius: 0;
+      background: none; box-shadow: none; animation: none;
+    }
+    .nt:not(.noside) :is(.nt-titlebtn, .nt-newbtn) { display: none; }
+    .nt-sidebtn, .nt-wide { display: inline-flex; align-items: center; justify-content: center; }
+    .nt-created { display: inline; }
+    .nt:not(.noside) .nt-tools { flex: 1; }
+    .nt-doc { max-width: 780px; margin: 0 auto; padding: 8px 20px 40px; }
+    .nt-doc.is-empty::before { left: 20px; top: 10px; }
+  }
+
+  /* ---------- narrow (vertical docks): tighter everything ---------- */
+  @container pane (max-width: 420px) {
+    .nt-head { gap: 2px; }
+    .nt-titlebtn { flex-basis: 100%; }
+    .nt-tools { flex: 1; }
+    .nt-doc { padding: 4px 8px 24px; }
+    .nt-doc.is-empty::before { left: 8px; }
+    .nt.pop .nt-side { top: 70px; width: 100%; max-height: calc(100% - 76px); }
+    .nt-foot { padding: 5px 6px 0; }
+  }
+
+  /* ---------- sketch overlay ---------- */
+  .sk {
+    position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; gap: 8px;
+    padding: 6px; box-sizing: border-box; outline: none;
+    background: linear-gradient(var(--surface), var(--surface)), var(--bg); border-radius: var(--r-md);
+    animation: sk-in calc(var(--dur) * .7) var(--spring) both;
+  }
+  .sk.sk-out { animation: sk-out .18s var(--ease) both; pointer-events: none; }
+  @keyframes sk-in { from { opacity: 0; scale: .97; translate: 0 8px; } }
+  @keyframes sk-out { to { opacity: 0; scale: .98; } }
+  .sk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .sk-group { display: flex; align-items: center; gap: 3px; }
+  .sk-spacer { flex: 1; }
+  .sk .icon-btn.on { background: var(--sel); color: var(--fg); }
+  .sk-swatch {
+    width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+    background: var(--c); box-shadow: inset 0 0 0 1px var(--line); transition: scale .2s var(--ease), box-shadow .2s var(--ease);
+  }
+  .sk-swatch:hover { scale: 1.12; }
+  .sk-swatch.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--c); }
+  .sk-size {
+    display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--r-sm);
+    background: none; color: var(--fg); cursor: pointer; transition: background .15s var(--ease);
+  }
+  .sk-size:hover { background: var(--hover); }
+  .sk-size.on { background: var(--sel); }
+  .sk-size i { width: var(--s); height: var(--s); border-radius: 50%; background: currentColor; }
+  .sk-stage {
+    position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; cursor: crosshair;
+    border-radius: var(--r-md); box-shadow: inset 0 0 0 1px var(--line);
+    background: radial-gradient(circle, var(--line) 1px, transparent 1.5px) 0 0 / 22px 22px;
+  }
+  .sk[data-tool="eraser"] .sk-stage { cursor: cell; }
+  .sk-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+}

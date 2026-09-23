@@ -1,0 +1,127 @@
+/* Shelf tab (ui/shelf.js). Every rule is scoped to the pane. */
+section[data-pane="shelf"] { gap: 8px; }
+
+/* ---- toolbar ---- */
+section[data-pane="shelf"] .shelf-bar { flex-wrap: wrap; gap: 6px; }
+section[data-pane="shelf"] .shelf-ico { display: grid; flex: none; }
+section[data-pane="shelf"] .shelf-count { margin-left: auto; font-size: .78em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+section[data-pane="shelf"] .shelf-clear:hover { color: var(--danger); }
+
+/* ---- zip name prompt (swaps in for the toolbar) ---- */
+section[data-pane="shelf"] .shelf-zip { gap: 8px; animation: shelf-in .25s var(--ease); }
+section[data-pane="shelf"] .shelf-zipico { color: var(--accent); }
+section[data-pane="shelf"] .shelf-zipico svg { width: 20px; height: 20px; }
+section[data-pane="shelf"] .shelf-zipname { flex: 1 1 120px; }
+section[data-pane="shelf"] .shelf-zipto { font-size: .8em; white-space: nowrap; }
+section[data-pane="shelf"] .shelf-zip.busy { opacity: .55; pointer-events: none; }
+@keyframes shelf-in { from { opacity: 0; translate: 0 -6px; } }
+
+/* ---- grid: the drop zone is the list ---- */
+section[data-pane="shelf"] .shelf-grid {
+  flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; outline: none; padding: 6px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; align-content: start;
+  border-radius: var(--r-md); box-shadow: inset 0 0 0 1.5px transparent;
+  transition: box-shadow .2s, background-color .2s;
+}
+section[data-pane="shelf"] .shelf-grid.blank { display: flex; align-items: center; justify-content: center; }
+#island.dropping section[data-pane="shelf"] .shelf-grid {
+  box-shadow: inset 0 0 0 1.5px var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+section[data-pane="shelf"] .shelf-empty { display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: 320px; margin: 0; }
+section[data-pane="shelf"] .shelf-empty-ico { display: grid; margin-bottom: 6px; opacity: .6; }
+section[data-pane="shelf"] .shelf-empty-ico svg { width: 36px; height: 36px; stroke-width: 1.4; }
+section[data-pane="shelf"] .shelf-empty b { color: var(--fg); font-weight: 600; margin-bottom: 4px; }
+
+/* ---- cards ---- */
+section[data-pane="shelf"] .shelf-card {
+  --k: 0;
+  position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--r-md);
+  background: var(--surface); cursor: grab; scroll-margin: 8px; outline: 2px solid transparent; outline-offset: -2px;
+  transition: translate .32s var(--spring), scale .32s var(--spring), rotate .32s var(--spring),
+              box-shadow .24s var(--ease), background-color .15s, outline-color .15s, opacity .2s;
+}
+section[data-pane="shelf"] .shelf-card:hover { background: var(--surface-2); translate: 0 -2px; box-shadow: 0 10px 22px -12px rgb(0 0 0 / .6); }
+section[data-pane="shelf"] .shelf-card.sel { background: var(--sel); }
+section[data-pane="shelf"] .shelf-card.cur { outline-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+section[data-pane="shelf"] .shelf-grid:focus-visible .shelf-card.cur { outline-color: var(--accent); }
+
+section[data-pane="shelf"] .shelf-thumb {
+  position: relative; aspect-ratio: 4 / 3; border-radius: var(--r-sm); overflow: clip; display: grid; place-items: center;
+  /* images sit on a subtle checkerboard so transparency and letterboxing read */
+  background: repeating-conic-gradient(var(--surface) 0 25%, var(--surface-2) 0 50%) 50% / 14px 14px;
+}
+section[data-pane="shelf"] .shelf-thumb.glyph { background: var(--surface-2); }
+/* absolute, so the image's natural size can't stretch the 4:3 box */
+section[data-pane="shelf"] .shelf-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none; }
+section[data-pane="shelf"] .shelf-glyph { display: grid; color: var(--muted); }
+section[data-pane="shelf"] .shelf-glyph svg { width: 42px; height: 42px; stroke-width: 1.3; }
+section[data-pane="shelf"] .shelf-ext {
+  position: absolute; left: 50%; bottom: 10px; translate: -50% 0; padding: 1px 7px; border-radius: 999px;
+  background: var(--bg); color: var(--fg); font: 600 .62em/1.6 var(--mono); letter-spacing: .04em;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .3);
+}
+section[data-pane="shelf"] .shelf-name {
+  font-size: .85em; line-height: 1.25; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+section[data-pane="shelf"] .shelf-meta {
+  font-size: .72em; color: var(--muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+section[data-pane="shelf"] .shelf-check {
+  position: absolute; top: 12px; right: 12px; width: 22px; height: 22px; border-radius: 50%; pointer-events: none;
+  display: grid; place-items: center; background: var(--accent); color: var(--on-accent);
+  box-shadow: 0 2px 6px rgb(0 0 0 / .35); opacity: 0; scale: .5; transition: opacity .15s, scale .3s var(--spring);
+}
+section[data-pane="shelf"] .shelf-check svg { width: 14px; height: 14px; stroke-width: 2.6; }
+section[data-pane="shelf"] .shelf-card.sel .shelf-check { opacity: 1; scale: 1; }
+
+/* picked up for a drag out: the selection floats as a fanned stack */
+section[data-pane="shelf"] .shelf-card.lift {
+  z-index: 2; cursor: grabbing; scale: 1.05; rotate: calc(-1.5deg + var(--k) * .7deg);
+  translate: calc(var(--k) * 4px) calc(-10px - var(--k) * 3px);
+  box-shadow: 0 26px 48px -16px rgb(0 0 0 / .75), 0 8px 18px -8px rgb(0 0 0 / .5);
+}
+/* one-shot animations (keyframes are named shelf-<class>; shelf.js removes the class) */
+section[data-pane="shelf"] .shelf-card.new { animation: shelf-new .5s cubic-bezier(.2, .8, .25, 1) backwards; }
+section[data-pane="shelf"] .shelf-card.sent { animation: shelf-sent .6s var(--ease); }
+section[data-pane="shelf"] .shelf-card.copied { animation: shelf-copied .55s ease-out; }
+section[data-pane="shelf"] .shelf-card.gone { opacity: 0; scale: .9; transition: opacity .15s, scale .15s; }
+@keyframes shelf-new {
+  0% { opacity: 0; translate: 0 -24px; scale: .92; }
+  60% { opacity: 1; translate: 0 3px; scale: 1.01; }
+  100% { translate: 0 0; scale: 1; }
+}
+@keyframes shelf-sent {
+  0% { scale: 1.05; translate: 0 -10px; opacity: 1; }
+  40% { scale: .8; translate: 0 -40px; opacity: 0; }
+  41% { scale: .94; translate: 0 8px; opacity: 0; }
+  100% { scale: 1; translate: 0 0; opacity: 1; }
+}
+@keyframes shelf-copied {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); }
+  to { box-shadow: 0 0 0 12px transparent; }
+}
+
+section[data-pane="shelf"] .shelf-hint { flex: none; font-size: .72em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- narrow (side docks): icon-only actions, tighter cards, no hint ---- */
+@container pane (max-width: 420px) {
+  section[data-pane="shelf"] .shelf-bar .lbl, section[data-pane="shelf"] .shelf-hint,
+  section[data-pane="shelf"] .shelf-count, section[data-pane="shelf"] .shelf-zipto { display: none; }
+  section[data-pane="shelf"] .shelf-bar .chip { padding: 0 8px; }
+  section[data-pane="shelf"] .shelf-clear { margin-left: auto; }
+  section[data-pane="shelf"] .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; padding: 4px; }
+  section[data-pane="shelf"] .shelf-card { padding: 6px; gap: 4px; }
+  section[data-pane="shelf"] .shelf-glyph svg { width: 34px; height: 34px; }
+}
+/* ---- wide (popped out / big panel): roomier cards ---- */
+@container pane (min-width: 640px) {
+  section[data-pane="shelf"] .shelf-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; padding: 8px; }
+  section[data-pane="shelf"] .shelf-card { padding: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  section[data-pane="shelf"] .shelf-card { transition-property: background-color, outline-color, box-shadow; }
+  section[data-pane="shelf"] .shelf-card.new, section[data-pane="shelf"] .shelf-card.sent, section[data-pane="shelf"] .shelf-zip { animation: none; }
+}

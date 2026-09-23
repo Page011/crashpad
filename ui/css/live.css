@@ -1,0 +1,126 @@
+/* Live tab (ui/live.js). Every rule is scoped to the pane; keyframes are lv-*. */
+section[data-pane="live"] {
+  .lv-scroll { flex: 1; min-height: 0; overflow: auto; padding: 2px 4px 8px 2px; }
+  .lv-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .lv-sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .lv-h { margin: 0 0 0 2px; font-size: .72em; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .lv-ic { display: inline-grid; place-items: center; flex: none; color: var(--muted); }
+  .lv-ic svg { width: 14px; height: 14px; }
+  .lv-empty { margin: 0; padding: 10px 12px; text-align: start; }
+
+  /* ---------- now playing ---------- */
+  .lv-np {
+    display: flex; align-items: center; gap: 12px; min-height: 64px;
+    padding: 8px 10px 8px 8px; border-radius: var(--r-lg); background: var(--surface);
+    transition: background-color .3s var(--ease);
+  }
+  .lv-np.lv-off { background: transparent; min-height: 52px; }
+  .lv-art { flex: none; width: 48px; height: 48px; border-radius: var(--r-md); object-fit: cover; box-shadow: 0 2px 8px rgb(0 0 0 / .35); animation: lv-in .3s var(--ease); }
+  .lv-art-none { display: grid; place-items: center; background: var(--surface-2); color: var(--muted); box-shadow: none; }
+  .lv-art-none svg { width: 22px; height: 22px; }
+  .lv-np-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .lv-np-title { font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .lv-np-sub { font-size: .85em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .lv-np-time { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: .75em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lv-prog { flex: 1; height: 3px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .lv-prog i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width 1s linear; }
+  .lv-ctl { display: flex; align-items: center; gap: 2px; flex: none; }
+  .lv-btn {
+    display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+    background: none; color: var(--fg); transition: background-color .15s, scale .15s var(--ease);
+  }
+  .lv-btn:hover { background: var(--hover); }
+  .lv-btn:active { scale: .9; }
+  .lv-btn svg { width: 20px; height: 20px; }
+  .lv-ctl .lv-btn:nth-child(2) { width: 38px; height: 38px; background: var(--fg); color: var(--bg); }
+  .lv-ctl .lv-btn:nth-child(2):hover { filter: brightness(.9); }
+
+  /* ---------- timers ---------- */
+  .lv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lv-field {
+    display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 3px 4px 3px 11px;
+    border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--line);
+    transition: border-color .15s, box-shadow .2s var(--ease);
+  }
+  .lv-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .lv-input { flex: 1; min-width: 0; padding: 5px 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; }
+  .lv-hint { min-height: 1.2em; margin: -4px 0 0 4px; font-size: .78em; font-variant-numeric: tabular-nums; }
+  .lv-hint:empty { display: none; }
+  .lv-tlist { display: flex; flex-direction: column; gap: 2px; }
+  .lv-t {
+    display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 8px; border-radius: var(--r-md); outline: none;
+    animation: lv-in .3s var(--ease); transition: background-color .15s;
+  }
+  .lv-t:hover { background: var(--hover); }
+  .lv-t[aria-selected="true"] { background: var(--sel); }
+  .lv-t:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .lv-ring { flex: none; width: 30px; height: 30px; }
+  .lv-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .lv-ring circle { fill: none; stroke: var(--surface-2); stroke-width: 3.5; }
+  .lv-ring .fg { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 1s linear; }
+  .paused .lv-ring .fg { stroke: var(--muted); transition: none; }
+  .done .lv-ring .fg { stroke: var(--ok); }
+  .lv-t-body { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+  .lv-t-time { font-size: 1.15em; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  .paused .lv-t-time { color: var(--muted); }
+  .done .lv-t-time { color: var(--ok); }
+  .lv-t-label { font-size: .85em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .lv-t-actions { display: flex; gap: 2px; flex: none; opacity: 0; transition: opacity .15s; }
+  .lv-t:hover .lv-t-actions, .lv-t:focus-within .lv-t-actions, .lv-t[aria-selected="true"] .lv-t-actions { opacity: 1; }
+  .lv-t-actions .icon-btn { width: 26px; height: 26px; }
+  .lv-t-actions .icon-btn svg { width: 16px; height: 16px; }
+
+  /* ---------- up next ---------- */
+  .lv-rlist { display: flex; flex-direction: column; gap: 2px; }
+  .lv-r {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 9px; border: 0; border-radius: var(--r-md);
+    background: none; color: inherit; font: inherit; text-align: start; transition: background-color .15s;
+  }
+  .lv-r:hover { background: var(--hover); }
+  .lv-r-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .lv-r-when { flex: none; font-size: .78em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .lv-r-when.overdue { color: var(--danger); }
+
+  /* ---------- system ---------- */
+  .lv-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .lv-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface); }
+  .lv-tile-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; font-size: .82em; }
+  .lv-tile-l { color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .lv-tile-v { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; white-space: pre; }
+  .lv-bar { height: 4px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .lv-bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--accent); transition: width .8s var(--ease), background-color .3s; }
+  .lv-bar.hot i { background: var(--danger); }
+
+  /* ---------- this pc ---------- */
+  .lv-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: .88em; }
+  .lv-dl dt { color: var(--muted); }
+  .lv-dl dd { margin: 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; user-select: text; }
+
+  /* popped out / big panel: two columns, live things left, the machine right */
+  @container pane (min-width: 640px) {
+    .lv-scroll { padding-right: 6px; }
+    .lv-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 24px; align-items: start; }
+    .lv-media { grid-column: 1; }
+    .lv-timers, .lv-next { grid-column: 1; }
+    .lv-sys { grid-column: 2; grid-row: 1 / span 2; }
+    .lv-specs { grid-column: 2; }
+    .lv-tiles { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  }
+  /* side docks: tight column */
+  @container pane (max-width: 420px) {
+    .lv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lv-tile-h { flex-direction: column; align-items: flex-start; gap: 0; }
+    .lv-tile-v { white-space: normal; }
+    .lv-np { flex-wrap: wrap; }
+    .lv-ctl { width: 100%; justify-content: center; }
+    .lv-dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .lv-dl dt { margin-top: 4px; font-size: .85em; }
+    .lv-t-body { flex-direction: column; align-items: flex-start; gap: 0; }
+  }
+}
+
+@keyframes lv-in { from { opacity: 0; translate: 0 -4px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  section[data-pane="live"] * { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}

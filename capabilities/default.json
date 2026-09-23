@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "The page listens to events and drags the popped-out window by its header; everything else goes through crashpad's own commands.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
+}
