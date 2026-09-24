@@ -1,5 +1,6 @@
-// Live tab: what's playing, countdown timers, the next reminders, system gauges and this PC's specs.
-import { state, $, $$, h, icon, iconBtn, call, listen, shell } from './core.js';
+// Live tab: what's playing, output volume and mutes, countdown timers, the next reminders, system gauges
+// and this PC's specs.
+import { T, state, $, $$, h, icon, iconBtn, call, listen, shell } from './core.js';
 
 const MIN = 60e3;
 const QUICK = [['1m', MIN], ['5m', 5 * MIN], ['10m', 10 * MIN], ['25m', 25 * MIN]];
@@ -60,19 +61,47 @@ function when(ms) {
 }
 
 // ---------- state ----------
-let pane, input, hint, tlist, np, rlist, tiles, specsEl, audio;
-let timers = [], media = null, stats = null, reminders = [], specs = null, sel = null;
+let pane, input, hint, tlist, np, rlist, tiles, specsEl, audio, sndSec, vol, volV, muteBtn, micBtn;
+let timers = [], media = null, stats = null, reminders = [], specs = null, sel = null, snd = null;
+let art = { key: '', thumb: '' };
+export function withArt(m) {
+  const key = `${m.title}\0${m.artist}`;
+  if (m.thumb) art = { key, thumb: m.thumb };
+  else if (art.key === key) m.thumb = art.thumb;
+  return m;
+}
 const tileEls = new Map();
 const visible = () => state.isOpen && state.tab === 'live';
 const left = t => (t.done ? 0 : t.end ? t.end - Date.now() : t.left);
 const rows = () => $$('.lv-t', tlist);
 
 // ---------- now playing ----------
+let npKey = null; // what the now-playing block was last built for; ticks only touch progress/play
 function renderMedia() {
   const m = media, live = m && m.status !== 'none' && (m.title || m.status === 'playing');
   np.classList.toggle('lv-off', !live);
-  if (!live) return np.replaceChildren(h('div.lv-art.lv-art-none', { html: ico('music') }), h('div.lv-np-text', {}, h('div.lv-np-title.muted', {}, 'Nothing playing')));
-  const playing = m.status === 'playing', ctl = (n, title, action) => h('button.lv-btn', { type: 'button', title, 'aria-label': title, html: ico(n), onclick: () => call('media_control', { action }) });
+  if (!live) {
+    npKey = null;
+    return np.replaceChildren(h('div.lv-art.lv-art-none', { html: ico('music') }), h('div.lv-np-text', {}, h('div.lv-np-title.muted', {}, 'Nothing playing')));
+  }
+  const playing = m.status === 'playing', key = [m.title, m.artist, m.album, m.app, m.thumb, m.duration > 0].join('\0');
+  if (key === npKey) {
+    // same track: update in place, so buttons keep focus and the art doesn't re-animate every second
+    const p = pct(m.position, m.duration), prog = np.querySelector('.lv-prog');
+    prog?.setAttribute('aria-valuenow', p);
+    if (prog) prog.firstChild.style.width = `${p}%`;
+    const time = np.querySelector('.lv-np-time span');
+    if (time) time.textContent = `${mmss(m.position)} / ${mmss(m.duration)}`;
+    const mid = np.querySelectorAll('.lv-ctl .lv-btn')[1];
+    if (mid && mid.dataset.playing !== String(playing)) {
+      mid.dataset.playing = playing;
+      mid.innerHTML = ico(playing ? 'pause' : 'play');
+      mid.title = mid.ariaLabel = playing ? 'Pause' : 'Play';
+    }
+    return;
+  }
+  npKey = key;
+  const ctl = (n, title, action) => h('button.lv-btn', { type: 'button', title, 'aria-label': title, html: ico(n), onclick: () => call('media_control', { action }) });
   np.replaceChildren(
     m.thumb?.startsWith('data:image/') ? h('img.lv-art', { src: m.thumb, alt: '' }) : h('div.lv-art.lv-art-none', { html: ico('music') }),
     h('div.lv-np-text', {},
@@ -81,7 +110,45 @@ function renderMedia() {
       m.duration > 0 && h('div.lv-np-time', {},
         h('div.lv-prog', { role: 'progressbar', 'aria-valuenow': pct(m.position, m.duration) }, h('i', { style: `width:${pct(m.position, m.duration)}%` })),
         h('span.muted', {}, `${mmss(m.position)} / ${mmss(m.duration)}`))),
-    h('div.lv-ctl', {}, ctl('prev', 'Previous', 'prev'), ctl(playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', 'toggle'), ctl('next', 'Next', 'next')));
+    h('div.lv-ctl', {}, ctl('prev', 'Previous', 'prev'), (b => ((b.dataset.playing = playing), b))(ctl(playing ? 'pause' : 'play', playing ? 'Pause' : 'Play', 'toggle')), ctl('next', 'Next', 'next')));
+}
+
+// ---------- sound (Rust polls Core Audio and sends "audio" on every change) ----------
+let vTimer = 0, sentAt = 0, sending = Promise.resolve();
+const paintVol = v => { vol.value = v; vol.style.setProperty('--p', `${v}%`); volV.textContent = `${v}%`; };
+function renderSound() {
+  sndSec.hidden = !snd;
+  if (!snd) return;
+  // the slider is the user's while they hold it and for a moment after (Rust echoes older values meanwhile)
+  if (!vol.matches(':active') && Date.now() - sentAt > 500) paintVol(Math.round(snd.volume * 100));
+  const set = (b, name, title, on) => { b.innerHTML = icon(name); b.title = b.ariaLabel = title; b.ariaPressed = String(on); };
+  set(muteBtn, snd.muted ? 'volume-x' : 'volume', snd.muted ? 'Unmute (M)' : 'Mute (M)', snd.muted);
+  micBtn.hidden = snd.micMuted == null;
+  set(micBtn, snd.micMuted ? 'mic-off' : 'mic', snd.micMuted ? 'Unmute microphone' : 'Mute microphone', !!snd.micMuted);
+  sndSec.classList.toggle('lv-muted', snd.muted);
+}
+// no output device is a state, not an error: the card just hides (no toast)
+const loadSound = () => T.core.invoke('get_audio').catch(() => null).then(a => { snd = a; renderSound(); });
+/** At most ~20 set_volume a second while dragging; the release ('change') sends the final value. */
+function sendVolume() {
+  clearTimeout(vTimer);
+  vTimer = 0;
+  sentAt = Date.now();
+  const volume = vol.value / 100;
+  // one at a time: async commands run in parallel in Rust, so an earlier set could land after the final one
+  sending = sending.then(() => call('set_volume', { volume }));
+  setTimeout(renderSound, 550); // then catch up with anything that changed meanwhile
+}
+function dragVolume() {
+  paintVol(+vol.value);
+  vTimer ||= setTimeout(sendVolume, Math.max(0, 50 - (Date.now() - sentAt)));
+}
+async function toggleMute(key, cmd) {
+  if (!snd) return;
+  const on = !snd[key];
+  snd = { ...snd, [key]: on }; // show it now; the "audio" echo confirms
+  renderSound();
+  if ((await call(cmd, { on })) === undefined) loadSound();
 }
 
 // ---------- timers ----------
@@ -260,8 +327,10 @@ function keydown(e) {
     if (k === 'Enter') return act(id, 'restart'), done();
     if (k === 'Delete' || k === 'Backspace') return remove(id), done();
   }
+  const typing = t.matches?.('input:not([type=range]), textarea, select, [contenteditable]');
+  if ((k === 'm' || k === 'M') && !e.repeat && snd && !typing) return toggleMute('muted', 'set_mute'), done();
   // typing a number anywhere starts a timer (the digit lands in the input)
-  if (/^\d$/.test(k) && !t.matches?.('input, textarea, select, [contenteditable]')) input.focus();
+  if (/^\d$/.test(k) && !typing) input.focus();
   return false;
 }
 
@@ -279,8 +348,14 @@ export default {
     rlist = h('div.lv-rlist');
     tiles = h('div.lv-tiles');
     specsEl = h('dl.lv-dl');
+    vol = h('input.lv-vol', { type: 'range', min: 0, max: 100, 'aria-label': 'Volume', oninput: dragVolume, onchange: sendVolume });
+    volV = h('span.lv-vol-v', { 'aria-hidden': 'true' });
+    muteBtn = iconBtn('volume', 'Mute (M)', () => toggleMute('muted', 'set_mute'));
+    micBtn = iconBtn('mic', 'Mute microphone', () => toggleMute('micMuted', 'set_mic_mute'));
+    sndSec = sec('lv-audio', 'Audio', h('div.lv-snd', {}, muteBtn, vol, volV, micBtn));
     pane.append(h('div.lv-scroll.scroll', {}, h('div.lv-grid', {},
       sec('lv-media', 'Now playing', np),
+      sndSec,
       sec('lv-timers', 'Timers',
         h('div.lv-chips', {}, ...QUICK.map(([l, ms]) => h('button.chip', { type: 'button', onclick: () => add(ms) }, l))),
         h('div.lv-field', {}, h('span.lv-ic', { html: icon('clock') }), input, iconBtn('plus', 'Start (Enter)', () => { submit(); input.focus(); })),
@@ -291,8 +366,11 @@ export default {
     renderMedia();
     renderTimers();
     renderReminders();
-    listen('media', m => { media = m; renderMedia(); });
+    // Rust sends the (large) art once per track; later ticks carry an empty thumb = keep it
+    listen('media', m => { media = withArt(m); renderMedia(); }).then(() => call('get_media')).then(m => { if (m && !media) { media = withArt(m); renderMedia(); } });
     listen('stats', s => { stats = s; renderStats(); });
+    renderSound();
+    listen('audio', a => { snd = a; renderSound(); }).then(loadSound);
     listen('reminders', r => { reminders = r ?? []; renderReminders(); });
     (async () => {
       await listen('timers', t => { timers = t ?? []; renderTimers(); });
@@ -307,6 +385,7 @@ export default {
     renderReminders();
     renderStats();
     loadSpecs();
+    loadSound();
     call('get_reminders').then(r => { if (r) { reminders = r; renderReminders(); } });
     input.focus();
   },

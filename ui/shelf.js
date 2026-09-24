@@ -1,6 +1,7 @@
 // Shelf tab: park files for a moment (drop them here, or shake one you're dragging), then drag
 // them out into any app, copy them, or zip them. Items are references; nothing is copied or moved.
 import { h, icon, iconBtn, call, listen, toast, assetUrl, ago, clamp, menu } from './core.js';
+import { copyTextFrom } from './ocr.js';
 
 const MOVES = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
 const ZIP = icon('file').replace('</svg>', '<path d="M9.5 8.5h2M9.5 11.5h2M9.5 14.5h2M10.5 17v1.5"/></svg>'); // a file with a zipper
@@ -216,11 +217,13 @@ async function dragOut() {
 
 function openMenu(at) {
   const s = sel.size, n = items.length, some = picked().length > 0;
+  const one = picked().length === 1 && items.find(i => i.id === picked()[0]);
   menu([
     { label: s > 1 ? `Open ${s} items` : 'Open', icon: 'expand', kbd: 'Enter', run: open, disabled: !some },
     { label: 'Show in Explorer', icon: 'folder', kbd: 'R', run: reveal, disabled: !some },
     'sep',
     { label: s ? `Copy ${s > 1 ? `${s} files` : 'file'}` : 'Copy all', icon: 'copy', kbd: 'Ctrl+C', run: copy, disabled: !n },
+    one?.kind === 'image' && { label: 'Copy text', icon: 'scan-text', run: () => copyTextFrom(one.path) },
     { label: s ? 'Zip selected…' : 'Zip all…', icon: 'file', kbd: 'Z', run: askZip, disabled: !n },
     'sep',
     { label: s > 1 ? `Remove ${s} from shelf` : 'Remove from shelf', icon: 'trash', kbd: 'Del', run: remove, danger: true, disabled: !s },

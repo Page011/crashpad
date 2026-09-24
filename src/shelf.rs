@@ -40,7 +40,7 @@ fn park(list: &mut Vec<Item>, path: PathBuf, kind: &str, size: u64, now: u64) ->
 
 pub(crate) fn load(app: &AppHandle) {
     let path = file(app);
-    let mut list: Vec<Item> = match fs::read_to_string(&path) {
+    let list: Vec<Item> = match fs::read_to_string(&path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
             eprintln!("crashpad: unreadable shelf ({e}); kept a copy as shelf.json.bad");
             let _ = fs::copy(&path, path.with_extension("json.bad"));
@@ -48,7 +48,8 @@ pub(crate) fn load(app: &AppHandle) {
         }),
         Err(_) => Vec::new(),
     };
-    list.retain(|i| Path::new(&i.path).exists());
+    // no exists() sweep here: an unplugged drive or offline share would stall start-up and drop
+    // items that still exist; use-time checks report "no longer exist" instead
     let scope = app.asset_protocol_scope(); // thumbnails: the scope isn't persisted
     for i in list.iter().filter(|i| i.kind == "image") {
         let _ = scope.allow_file(&i.path);
@@ -108,9 +109,14 @@ fn ps_quote(p: &Path) -> String {
 }
 
 // ponytail: Windows PowerShell's Compress-Archive caps at 2 GB per entry; shell out to tar/7z if that bites.
-fn ps_script(paths: &[PathBuf], zip: &Path) -> String {
-    let list = paths.iter().map(|p| ps_quote(p)).collect::<Vec<_>>().join(",");
-    format!("$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath {list} -DestinationPath {} -Force", ps_quote(zip))
+/// The paths are read from `list` (one per line), so hundreds of files don't hit the 32 K
+/// command-line limit; `-Command` because a script file would trip the default execution policy.
+fn ps_script(list: &Path, zip: &Path) -> String {
+    format!(
+        "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath (Get-Content -LiteralPath {} -Encoding UTF8) -DestinationPath {} -Force",
+        ps_quote(list),
+        ps_quote(zip)
+    )
 }
 
 // ---------- commands ----------
@@ -168,7 +174,7 @@ pub async fn shelf_reveal(app: AppHandle, id: u64) -> Res<()> {
 
 /// Put the files on the clipboard (CF_HDROP), so they can be pasted into Explorer or any app.
 #[tauri::command]
-pub fn shelf_copy(app: AppHandle, ids: Vec<u64>) -> Res<()> {
+pub async fn shelf_copy(app: AppHandle, ids: Vec<u64>) -> Res<()> {
     let files: Vec<String> = paths(&app, &ids)?.iter().map(|p| p.to_string_lossy().into()).collect();
     let _open = clipboard_win::Clipboard::new_attempts(10).map_err(err)?;
     clipboard_win::raw::set_file_list_with(&files, clipboard_win::options::DoClear).map_err(err)
@@ -182,11 +188,16 @@ pub async fn shelf_zip(app: AppHandle, ids: Vec<u64>, name: String) -> Res<Vec<I
     let dir = app.path().download_dir().map_err(err)?;
     fs::create_dir_all(&dir).map_err(err)?;
     let zip = unique_path(&dir, &format!("{name}.zip"));
+    let list = zip.with_extension("ziplist");
+    let lines = files.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>().join("\r\n");
+    fs::write(&list, format!("\u{feff}{lines}")).map_err(err)?; // BOM: PowerShell 5.1 reads it as UTF-8 for sure
     let out = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script(&files, &zip)])
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script(&list, &zip)])
         .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
         .output()
-        .map_err(|e| format!("Couldn't run PowerShell: {e}"))?;
+        .map_err(|e| format!("Couldn't run PowerShell: {e}"));
+    let _ = fs::remove_file(&list);
+    let out = out?;
     if !out.status.success() || !zip.is_file() {
         let msg = String::from_utf8_lossy(&out.stderr);
         return Err(format!("Zip failed: {}", msg.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("unknown error")));
@@ -236,10 +247,10 @@ mod tests {
 
     #[test]
     fn powershell_script_quotes_paths() {
-        let s = ps_script(&["C:\\it's\\a.txt".into(), "D:\\dir".into()], Path::new("E:\\z.zip"));
+        let s = ps_script(Path::new("C:\\it's\\z.ziplist"), Path::new("E:\\z.zip"));
         assert_eq!(
             s,
-            "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath 'C:\\it''s\\a.txt','D:\\dir' -DestinationPath 'E:\\z.zip' -Force"
+            "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath (Get-Content -LiteralPath 'C:\\it''s\\z.ziplist' -Encoding UTF8) -DestinationPath 'E:\\z.zip' -Force"
         );
     }
 }

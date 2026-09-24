@@ -17,7 +17,7 @@ tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-opener = "2.5.5"
 tauri-plugin-single-instance = "2.4.5"
 webview2-com = "0.38"
-windows = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Graphics_Dxgi", "Win32_Storage_FileSystem", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_System_Power", "Win32_System_Registry", "Win32_System_WinRT", "Media_Control", "Foundation", "Foundation_Collections", "Storage_Streams"] }
+windows = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Graphics_Dxgi", "Win32_Storage_FileSystem", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_System_Power", "Win32_System_Registry", "Win32_System_WinRT", "Media_Control", "Foundation", "Foundation_Collections", "Storage_Streams", "Media_Ocr", "Graphics_Imaging", "Globalization", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }
 
 [build-dependencies]
 tauri-build = "2.6.3"

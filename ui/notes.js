@@ -16,6 +16,7 @@ const FM = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/; /
 let pane, root, side, listEl, search, ed, titleBtn, foot;
 let notes = [], shown = [], listDir, booted = false;
 let cur = null; // open note: { dir, name, text (as last read/written), edited, fresh }
+let freshName = null; // a note just created elsewhere (the palette): dropped if left empty, like Ctrl+N's
 let dirty = false, saveTimer, loadGen = 0, sketching = false, lastRange = null;
 let queue = Promise.resolve(); // file operations run one at a time, in order
 const run = fn => (queue = queue.then(() => fn()).catch(e => toast(String(e), true)));
@@ -771,7 +772,8 @@ async function openNote(name) {
   if (gen !== loadGen || html == null) return false;
   if (dirty) await run(flush); // typed into the old note while this one loaded
   if (dirty || gen !== loadGen) return false;
-  cur = { dir: f.dir, name: f.name, text: f.text };
+  cur = { dir: f.dir, name: f.name, text: f.text, fresh: f.name === freshName };
+  if (cur.fresh) freshName = null;
   if (!notes.some(n => n.name === name)) notes.unshift(stub(name));
   setDoc(html);
   resetHistory();
@@ -1105,6 +1107,15 @@ export default {
     return run(() => leave(false)); // awaitable, e.g. before quitting
   },
   keydown,
+  /** Open a note by file name (the palette). Before the first boot, boot opens it. */
+  openByName(name, fresh = false) {
+    if (sketching) return void toast('Finish or cancel the sketch first', true); // it would land in this note
+    if (fresh) freshName = name;
+    if (!booted) return void shell.setConfig({ lastNote: name }); // boot opens it (and it's remembered)
+    pick(name); // (not via run(): openNote queues its own save, and would wait on itself)
+  },
+  /** A sketch is open, so the note can't change under it. */
+  get busy() { return sketching; },
   async dropFiles(paths) {
     if (sketching || !paths?.length) return;
     const rels = (await call('import_to_notes', { paths })) ?? [];

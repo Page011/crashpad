@@ -59,6 +59,14 @@ section[data-pane="shots"] .tile figcaption {
 section[data-pane="shots"] .tile:hover figcaption,
 section[data-pane="shots"] .tile[aria-selected="true"] figcaption { opacity: 1; translate: 0 0; }
 
+/* ⋯ actions menu: shows on hover / selection (Shift+F10 opens it from the keyboard) */
+section[data-pane="shots"] .tile .more {
+  position: absolute; top: 6px; right: 6px; border-radius: 50%; color: #fff;
+  background: rgb(0 0 0 / .55); backdrop-filter: blur(6px); opacity: 0; transition: opacity .18s, background-color .15s;
+}
+section[data-pane="shots"] .tile:is(:hover, [aria-selected="true"]) .more { opacity: 1; }
+section[data-pane="shots"] .tile .more:hover { color: #fff; background: rgb(0 0 0 / .8); }
+
 /* ---------- one-shot animations (keyframes are named shot-<class>; shots.js removes the class) ---------- */
 section[data-pane="shots"] .badge {
   position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; border-radius: 50%;
@@ -122,6 +130,7 @@ section[data-pane="shots"] .ql .icon-btn:disabled { opacity: 0; pointer-events: 
 section[data-pane="shots"] .ql-prev { left: 8px; top: calc(50% - 34px); }
 section[data-pane="shots"] .ql-next { right: 8px; top: calc(50% - 34px); }
 section[data-pane="shots"] .ql-x { right: 8px; top: 8px; }
+section[data-pane="shots"] .ql-more { right: 44px; top: 8px; }
 
 /* narrow side docks: icon-only snip, tighter tiles */
 @container pane (max-width: 420px) {

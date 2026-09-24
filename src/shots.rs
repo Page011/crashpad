@@ -44,7 +44,10 @@ pub async fn list_shots(app: AppHandle) -> Res<Vec<Shot>> {
 
 #[tauri::command]
 pub async fn copy_image(app: AppHandle, name: String) -> Res<()> {
-    let img = image::open(shot_path(&app, &name)?).map_err(err)?.into_rgba8();
+    set_clipboard(image::open(shot_path(&app, &name)?).map_err(err)?.into_rgba8())
+}
+
+fn set_clipboard(img: image::RgbaImage) -> Res<()> {
     let (w, h) = img.dimensions();
     let data = arboard::ImageData { width: w as usize, height: h as usize, bytes: img.into_raw().into() };
     arboard::Clipboard::new().and_then(|mut c| c.set_image(data)).map_err(err)
@@ -106,6 +109,60 @@ pub async fn save_image(app: AppHandle, request: Request<'_>) -> Res<String> {
     Ok(path.to_string_lossy().into())
 }
 
+/// Save a marked-up copy of a screenshot next to it as a new file. Body: the drawing as a
+/// transparent PNG at the image's full size; `name` header: the original's file name. Rust
+/// composites it (the page can't: asset images taint its canvas). Returns the new file name.
+#[tauri::command]
+pub async fn save_markup(app: AppHandle, request: Request<'_>) -> Res<String> {
+    let (path, img) = marked_up(&app, &request)?;
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let out = unique_path(&shots_dir(&app), &format!("{stem} (marked).png"));
+    img.save_with_format(&out, image::ImageFormat::Png).map_err(err)?;
+    Ok(out.file_name().unwrap_or_default().to_string_lossy().into())
+}
+
+/// Same composite as save_markup, put on the clipboard as an image instead.
+#[tauri::command]
+pub async fn copy_markup(app: AppHandle, request: Request<'_>) -> Res<()> {
+    set_clipboard(marked_up(&app, &request)?.1)
+}
+
+/// The screenshot named by the `name` header with the drawing in the raw body laid over it.
+fn marked_up(app: &AppHandle, request: &Request) -> Res<(PathBuf, image::RgbaImage)> {
+    let InvokeBody::Raw(png) = request.body() else { return Err("expected image bytes".into()) };
+    let name = request.headers().get("name").and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let path = shot_path(app, &uri_decode(name))?;
+    let mut img = upright(&path)?.into_rgba8();
+    composite(&mut img, image::load_from_memory_with_format(png, image::ImageFormat::Png).map_err(err)?);
+    Ok((path, img))
+}
+
+/// The shot the way the page drew on it: <img> honours EXIF rotation (phone photos), image::open doesn't.
+fn upright(path: &Path) -> Res<image::DynamicImage> {
+    let mut dec = image::ImageReader::open(path).map_err(err)?.into_decoder().map_err(err)?;
+    image::Limits::default().reserve(image::ImageDecoder::total_bytes(&dec)).map_err(err)?; // image::open's 512 MB cap
+    let turn = image::ImageDecoder::orientation(&mut dec).map_err(err)?;
+    let mut img = image::DynamicImage::from_decoder(dec).map_err(err)?;
+    img.apply_orientation(turn);
+    Ok(img)
+}
+
+/// The page sends the name through encodeURIComponent: header values must be ASCII, file names needn't be.
+fn uri_decode(s: &str) -> String {
+    tauri::Url::parse(&format!("x:?{s}")).ok().and_then(|u| u.query_pairs().next().map(|(k, _)| k.into_owned())).unwrap_or_default()
+}
+
+/// Alpha-blend `overlay` onto `base`, stretched to fit first if the page capped its size.
+fn composite(base: &mut image::RgbaImage, overlay: image::DynamicImage) {
+    let (w, h) = base.dimensions();
+    let opaque = base.pixels().all(|p| p[3] == 255);
+    let top = if (overlay.width(), overlay.height()) == (w, h) { overlay } else { overlay.resize_exact(w, h, image::imageops::FilterType::Triangle) };
+    image::imageops::overlay(base, &top.into_rgba8(), 0, 0);
+    if opaque {
+        base.pixels_mut().for_each(|p| p[3] = 255); // blend's f32 math leaves 254 under see-through ink
+    }
+}
+
 /// Drag a screenshot out of the panel as a real file (into Explorer, chats, editors...).
 /// Call while the mouse button is still down. Returns "dropped" or "cancel".
 #[tauri::command]
@@ -160,5 +217,48 @@ mod tests {
         assert_eq!(dims(image::DynamicImage::new_rgba8(1920, 1080)), (240, 135));
         assert_eq!(dims(image::DynamicImage::new_rgb8(50, 400)), (30, 240));
         assert_eq!(dims(image::DynamicImage::new_rgba8(100, 60)), (100, 60)); // small ones stay sharp
+    }
+
+    #[test]
+    fn markup_composites_over_the_shot() {
+        use image::{Rgba, RgbaImage};
+        let grey = Rgba([90, 90, 90, 255]);
+        let mut base = RgbaImage::from_pixel(4, 4, grey);
+        let mut ink = RgbaImage::new(4, 4); // transparent
+        ink.put_pixel(1, 2, Rgba([255, 0, 0, 255]));
+        ink.put_pixel(3, 3, Rgba([0, 0, 255, 128])); // highlighter: half see-through
+        composite(&mut base, ink.into());
+        assert_eq!(base.get_pixel(1, 2), &Rgba([255, 0, 0, 255]));
+        assert_eq!(base.get_pixel(0, 0), &grey, "transparent ink leaves the shot alone");
+        let hl = base.get_pixel(3, 3);
+        assert!(hl[2] > 150 && hl[0] < 60 && hl[3] == 255, "{hl:?}");
+
+        // the page capped a huge shot: a half-size drawing is stretched back over it
+        let mut big = RgbaImage::from_pixel(8, 8, grey);
+        composite(&mut big, RgbaImage::from_pixel(4, 4, Rgba([0, 255, 0, 255])).into());
+        assert_eq!((big.dimensions(), big.get_pixel(7, 7)), ((8, 8), &Rgba([0, 255, 0, 255])));
+    }
+
+    #[test]
+    fn markup_base_follows_exif_rotation() {
+        use image::ImageEncoder;
+        // a 4×2 JPEG tagged "rotate 90°" (raw TIFF: one IFD entry, Orientation = 6) shows as 2×4
+        let exif = vec![0x49, 0x49, 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+        let mut jpg = Vec::new();
+        let mut enc = image::codecs::jpeg::JpegEncoder::new(&mut jpg);
+        enc.set_exif_metadata(exif).unwrap();
+        enc.write_image(&[0; 24], 4, 2, image::ExtendedColorType::Rgb8).unwrap();
+        let p = std::env::temp_dir().join(format!("crashpad-exif-{}.jpg", std::process::id()));
+        fs::write(&p, jpg).unwrap();
+        let dims = upright(&p).map(|i| (i.width(), i.height()));
+        let _ = fs::remove_file(&p);
+        assert_eq!(dims, Ok((2, 4)));
+    }
+
+    #[test]
+    fn markup_names_round_trip() {
+        assert_eq!(uri_decode("shot1.png"), "shot1.png");
+        assert_eq!(uri_decode("Caf%C3%A9%20%E2%98%95%20a%2Bb%26c%3Dd%23.png"), "Café ☕ a+b&c=d#.png");
+        assert!(bare_name(&uri_decode("..%5Cx.png")).is_err());
     }
 }

@@ -1,8 +1,12 @@
 // No console window in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio;
+mod capture;
 mod clip;
 mod dock;
+mod ocr;
+mod picker;
 mod notes;
 mod reminders;
 mod shots;
@@ -26,7 +30,7 @@ use tauri::{
     ipc::{InvokeBody, Request},
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
 const IMG_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
@@ -122,6 +126,8 @@ struct Config {
     shake_open: bool,
     /// Show live activities (music, timers, next reminder) on the collapsed pill.
     pill_activities: bool,
+    /// Global hotkey for the quick-capture bar ("" = off).
+    capture_hotkey: String,
 }
 
 impl Default for Config {
@@ -178,6 +184,7 @@ impl Default for Config {
             last_tab: "notes".into(),
             shake_open: true,
             pill_activities: true,
+            capture_hotkey: "Alt+Shift+C".into(),
         }
     }
 }
@@ -357,12 +364,13 @@ struct Pad {
     own_window: AtomicIsize,
     /// Window that had focus before we grabbed it, so closing hands focus back.
     prev_window: AtomicIsize,
-    /// Heads-ups for the user, one slot per source ([HOTKEY], [EDGE]); `ready` hands them to the page.
-    notices: Mutex<[Option<String>; 2]>,
+    /// Heads-ups for the user, one slot per source ([HOTKEY], [EDGE], [CAPTURE]); `ready` hands them to the page.
+    notices: Mutex<[Option<String>; 3]>,
 }
 
 const HOTKEY: usize = 0;
 const EDGE: usize = 1;
+const CAPTURE: usize = 2;
 
 fn main_window(app: &AppHandle) -> WebviewWindow {
     app.get_webview_window("main").expect("main window")
@@ -465,6 +473,11 @@ fn set_config(app: AppHandle, cfg: Config) -> Res<Config> {
         st.cfg.lock().unwrap().hotkey = cfg.hotkey.clone(); // keep state honest if a later step fails
         notify(&app, HOTKEY, None);
     }
+    if cfg.capture_hotkey != old.capture_hotkey {
+        rebind_hotkey(&app, &old.capture_hotkey, &cfg.capture_hotkey)?;
+        st.cfg.lock().unwrap().capture_hotkey = cfg.capture_hotkey.clone();
+        notify(&app, CAPTURE, None);
+    }
     if cfg.autostart != old.autostart {
         let al = app.autolaunch();
         if cfg.autostart { al.enable() } else { al.disable() }.map_err(err)?;
@@ -510,10 +523,12 @@ fn main() {
         }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _, e| {
-                    if e.state == ShortcutState::Pressed {
-                        toggle(app)
+                .with_handler(|app, key, e| {
+                    if e.state != ShortcutState::Pressed {
+                        return;
                     }
+                    let capture = app.state::<Pad>().cfg.lock().unwrap().capture_hotkey.parse::<Shortcut>();
+                    if capture.is_ok_and(|c| c.id() == key.id()) { capture::show(app) } else { toggle(app) }
                 })
                 .build(),
         )
@@ -522,12 +537,18 @@ fn main() {
         .setup(|app| {
             let h = app.handle().clone();
             let mut cfg = load_config(&h);
+            // the main hotkey keeps a chord the capture hotkey shares (a v3 user on Alt+Shift+C, a hand
+            // edit): registering both would leave every press opening quick capture
+            let chord = |s: &str| s.parse::<Shortcut>().ok().map(|k| k.id());
+            if chord(&cfg.capture_hotkey).is_some_and(|c| Some(c) == chord(&cfg.hotkey)) {
+                cfg.capture_hotkey.clear();
+            }
             cfg.autostart = h.autolaunch().is_enabled().unwrap_or(false);
             let scope = h.asset_protocol_scope();
             let _ = scope.allow_directory(&cfg.screenshots_dir, false);
             let _ = scope.allow_directory(&cfg.notes_dir, true); // sketches and pasted images
             let _ = scope.allow_directory(clip::images_dir(&h), false);
-            let hotkey = cfg.hotkey.clone();
+            let (hotkey, capture) = (cfg.hotkey.clone(), cfg.capture_hotkey.clone());
             let own = main_window(&h).hwnd()?.0 as isize;
             app.manage(Pad { cfg: Mutex::new(cfg), own_window: own.into(), ..Default::default() });
             clip::load(&h);
@@ -539,12 +560,15 @@ fn main() {
             if let Err(e) = h.global_shortcut().register(hotkey.as_str()) {
                 notify(&h, HOTKEY, Some(format!("Hotkey {hotkey} is taken ({e}). Pick another in Settings.")));
             }
+            if let Some(Err(e)) = (!capture.trim().is_empty()).then(|| h.global_shortcut().register(capture.as_str())) {
+                notify(&h, CAPTURE, Some(format!("Quick-capture hotkey {capture} is taken ({e}). Pick another in Settings.")));
+            }
             // The window stays visible for its whole life (show/hide flashes white and throttles
             // WebView2); "collapsed" is just CSS plus click-through.
             set_click_through(&h, true);
             place(&h)?;
             hook_file_drops(&main_window(&h))?;
-            for watcher in [watch_mouse, clip::watch_clipboard, reminders::watch, dock::watch_backdrop, live::watch] {
+            for watcher in [watch_mouse, clip::watch_clipboard, reminders::watch, dock::watch_backdrop, live::watch, audio::watch] {
                 let h = h.clone();
                 thread::spawn(move || watcher(h));
             }
@@ -608,6 +632,7 @@ fn main() {
             reminders::delete_reminder,
             live::get_specs,
             live::media_control,
+            live::get_media,
             live::get_timers,
             live::add_timer,
             live::update_timer,
@@ -621,6 +646,15 @@ fn main() {
             shelf::shelf_copy,
             shelf::shelf_zip,
             shelf::shelf_drag,
+            capture::append_inbox,
+            ocr::ocr_image,
+            picker::pick_color,
+            audio::get_audio,
+            audio::set_volume,
+            audio::set_mute,
+            audio::set_mic_mute,
+            shots::save_markup,
+            shots::copy_markup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running crashpad");

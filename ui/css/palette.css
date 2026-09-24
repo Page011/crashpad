@@ -1,0 +1,70 @@
+/* Command palette and quick-capture bar (ui/palette.js). Normally a box floating over the open panel
+   (dimmed and blurred behind it); with .island.capture the island itself becomes a compact bar. */
+body { --pal-cw: min(560px, var(--panel-w)); }
+
+.island > .pal {
+  position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center;
+  padding: 12px; border-radius: inherit; background: rgb(0 0 0 / .2); backdrop-filter: blur(6px);
+  animation: pal-fade .18s var(--ease);
+}
+.pal-box {
+  display: flex; flex-direction: column; flex: 0 1 auto; width: min(540px, 100%); min-height: 0; overflow: clip;
+  border-radius: var(--r-lg); background: color-mix(in srgb, var(--bg) 90%, var(--fg));
+  box-shadow: var(--shadow-float), inset 0 0 0 1px var(--line);
+  animation: pal-in .26s var(--spring);
+}
+/* see-through materials: a denser pane of the same glass (bg-on-fg mixes turn white-on-white) */
+body:is([data-material=frosted], [data-material=glass]) .island:not(.capture) .pal-box {
+  background: color-mix(in srgb, var(--bg) 24%, transparent); backdrop-filter: blur(24px) saturate(1.6);
+}
+.pal-bar { display: flex; align-items: center; gap: 10px; flex: none; padding: 10px 14px; }
+.pal-glyph { display: grid; flex: none; color: var(--muted); }
+.pal-glyph svg { width: 18px; height: 18px; }
+.pal input.pal-q, .pal input.pal-q:focus {
+  flex: 1; min-width: 0; padding: 4px 0; border: 0; border-radius: 0; background: none; box-shadow: none; font-size: 1.08em;
+}
+.pal-hint { display: none; }
+.pal-list { flex: 1 1 auto; min-height: 0; padding: 4px 6px 6px; border-top: 1px solid var(--line); }
+.pal-head {
+  padding: 8px 8px 3px; font-size: .7em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.pal-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: var(--r-sm); cursor: pointer; }
+.pal-row[aria-selected=true] { background: var(--sel); }
+.pal-ico {
+  display: grid; place-items: center; flex: none; width: 28px; height: 28px;
+  border-radius: var(--r-sm); background: var(--surface-2); color: var(--muted);
+}
+.pal-row[aria-selected=true] .pal-ico { color: var(--fg); }
+.pal-ico svg { width: 16px; height: 16px; }
+.pal-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pal-title, .pal-sub { overflow: clip; white-space: nowrap; text-overflow: ellipsis; }
+.pal-title { font-size: .92em; }
+.pal-sub { font-size: .75em; color: var(--muted); }
+.pal-go { flex: none; display: flex; align-items: center; gap: 6px; font-size: .75em; color: var(--muted); visibility: hidden; }
+.pal-row[aria-selected=true] .pal-go { visibility: visible; }
+
+/* ---------- quick capture: the island morphs straight from the pill into the bar ---------- */
+.island.open.capture { width: var(--pal-cw); height: fit-content; }
+.island.open.capture > .panel { opacity: 0; visibility: hidden; pointer-events: none; transition: none; }
+/* the only in-flow child, so it sizes the island and sits on its anchor (like the collapsed alert card) */
+.island.capture > .pal {
+  position: relative; inset: auto; flex: none; width: var(--pal-cw); max-height: var(--panel-h);
+  align-items: stretch; padding: 0; background: none; backdrop-filter: none; border-radius: 0;
+  transform-origin: calc(var(--i-ax) * 100%) calc(var(--i-ay) * 100%);
+  animation: pal-show calc(var(--i-cd) * .55) var(--ease) var(--i-cdl) both, pal-grow var(--i-cd) var(--i-mt) var(--i-cdl) both;
+}
+.island.capture .pal-box { width: auto; border-radius: 0; background: none; box-shadow: none; animation: none; }
+.island.capture .pal-bar { padding: 12px 16px 4px; }
+.island.capture .pal-hint {
+  display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; padding: 0 16px 12px 44px;
+  font-size: .8em; color: var(--muted); white-space: nowrap;
+}
+.pal-hint > span { min-width: 0; overflow: clip; text-overflow: ellipsis; }
+.pal-hint > .kbd { flex: none; }
+.island.capture .pal-list { padding-top: 6px; }
+
+@keyframes pal-fade { from { opacity: 0; } }
+@keyframes pal-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+@keyframes pal-show { from { opacity: 0; filter: blur(6px); } }
+@keyframes pal-grow { from { transform: var(--i-from); } }
+@media (prefers-reduced-motion: reduce) { .island > .pal, .island.capture > .pal, .pal-box { animation: none; } }
