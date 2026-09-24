@@ -1,0 +1,41 @@
+/* Screenshot markup editor (ui/markup.js): covers the Shots pane, the shot scaled to fit. */
+section[data-pane="shots"] .mk {
+  position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 8px;
+  padding: 6px; outline: none; animation: mk-in calc(var(--dur) * .7) var(--spring) both;
+}
+/* the rest of the tab steps aside, so the editor sits on the island's own material (legible on all) */
+section[data-pane="shots"]:has(> .mk:not(.mk-out)) > :not(.mk) { visibility: hidden; }
+section[data-pane="shots"] .mk.mk-out { animation: mk-out .18s var(--ease) both; pointer-events: none; }
+@keyframes mk-in { from { opacity: 0; scale: .97; translate: 0 8px; } }
+@keyframes mk-out { to { opacity: 0; scale: .98; } }
+
+.mk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: none; }
+.mk-group { display: flex; align-items: center; gap: 2px; }
+.mk-spacer { flex: 1; }
+.mk .icon-btn { width: 26px; height: 26px; }
+.mk .icon-btn.on { background: var(--sel); color: var(--fg); }
+.mk .btn { height: 28px; padding: 0 12px; }
+.mk-swatch {
+  width: 18px; height: 18px; margin: 0 1px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--c); box-shadow: inset 0 0 0 1px var(--line); transition: scale .2s var(--ease), box-shadow .2s var(--ease);
+}
+.mk-swatch:hover { scale: 1.12; }
+.mk-swatch.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--c), inset 0 0 0 1px var(--line); }
+.mk-size {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--fg); cursor: pointer; transition: background-color .15s;
+}
+.mk-size:hover { background: var(--hover); }
+.mk-size.on { background: var(--sel); }
+.mk-size i { width: var(--s); height: var(--s); border-radius: 50%; background: currentColor; }
+
+/* the image box keeps the shot's aspect (--ar, set on load) and fits the stage: container units */
+.mk-stage { flex: 1; min-height: 0; display: grid; place-items: center; container-type: size; }
+.mk-fit {
+  position: relative; width: min(100cqw, 100cqh * var(--ar, 1.6)); aspect-ratio: var(--ar, 1.6);
+  touch-action: none; cursor: crosshair; border-radius: 4px; overflow: clip;
+  background: repeating-conic-gradient(var(--surface) 0 25%, var(--surface-2) 0 50%) 50% / 16px 16px;
+  box-shadow: 0 12px 30px -10px rgb(0 0 0 / .6), 0 0 0 1px var(--line);
+}
+.mk-fit img, .mk-fit canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.mk-fit img { pointer-events: none; -webkit-user-drag: none; }

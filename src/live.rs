@@ -86,7 +86,7 @@ struct Gpu {
 
 #[derive(Serialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
-struct Media {
+pub struct Media {
     title: String,
     artist: String,
     album: String,
@@ -250,11 +250,13 @@ fn octets() -> Option<(u64, u64)> {
         }
         let n = (*table).NumEntries as usize;
         let rows = std::slice::from_raw_parts(std::ptr::addr_of!((*table).Table).cast::<MIB_IF_ROW2>(), n);
+        let up = |r: &MIB_IF_ROW2| r.Type != IF_TYPE_SOFTWARE_LOOPBACK && r.OperStatus == IfOperStatusUp;
+        // physical NICs only, else a VPN or virtual switch counts the same bytes twice; a VM may have none
+        let hw = |r: &MIB_IF_ROW2| r.InterfaceAndOperStatusFlags._bitfield & 1 != 0;
+        let any_hw = rows.iter().any(|r| up(r) && hw(r));
         let (mut i, mut o) = (0u64, 0u64);
-        for r in rows {
-            if r.Type != IF_TYPE_SOFTWARE_LOOPBACK && r.OperStatus == IfOperStatusUp {
-                (i, o) = (i + r.InOctets, o + r.OutOctets);
-            }
+        for r in rows.iter().filter(|r| up(r) && (!any_hw || hw(r))) {
+            (i, o) = (i + r.InOctets, o + r.OutOctets);
         }
         FreeMibTable(table.cast());
         Some((i, o))
@@ -419,6 +421,18 @@ struct MediaWatch {
     /// title + artist the cached thumbnail belongs to
     key: String,
     thumb: String,
+    /// art re-reads left for this track (players publish the art a little after the title)
+    tries: u8,
+    /// which track's art the page already has (the 1 Hz payload carries it only once)
+    sent_key: String,
+}
+
+/// The last full media state, for a page that (re)loads while nothing is changing.
+static LAST_MEDIA: Mutex<Option<Media>> = Mutex::new(None);
+
+#[tauri::command]
+pub fn get_media() -> Option<Media> {
+    LAST_MEDIA.lock().unwrap().clone()
 }
 
 impl MediaWatch {
@@ -440,7 +454,11 @@ impl MediaWatch {
         let (title, artist, album) = (text(p.Title()), text(p.Artist()), text(p.AlbumTitle()));
         let key = format!("{title}\0{artist}");
         if key != self.key {
-            (self.key, self.thumb) = (key, thumb(&p).unwrap_or_default());
+            (self.key, self.thumb, self.tries) = (key, String::new(), 0);
+        }
+        if self.thumb.is_empty() && self.tries < 5 {
+            self.tries += 1;
+            self.thumb = thumb(&p).unwrap_or_default();
         }
         let (mut position, mut duration) = (0, 0);
         if let Ok(tl) = s.GetTimelineProperties() {
@@ -470,7 +488,15 @@ impl MediaWatch {
     fn tick(&mut self, app: &AppHandle) {
         let m = self.read().unwrap_or(Media { status: "none".into(), ..Default::default() });
         if m != self.last {
-            let _ = app.emit("media", &m);
+            // the art (up to MBs) rides along only when the page doesn't have this track's yet;
+            // an empty thumb with an unchanged title means "keep what you have"
+            let art_key = format!("{}\0{}\0{}", m.title, m.artist, !m.thumb.is_empty());
+            let fresh = art_key != self.sent_key;
+            let _ = app.emit("media", Media { thumb: if fresh { m.thumb.clone() } else { String::new() }, ..m.clone() });
+            if fresh {
+                self.sent_key = art_key;
+            }
+            *LAST_MEDIA.lock().unwrap() = Some(m.clone());
             self.last = m;
         }
     }

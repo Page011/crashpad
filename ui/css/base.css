@@ -21,6 +21,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+/* clip, not hidden: a hidden box can still be scrolled (focus, scrollIntoView, selection drags), which
+   shifted the whole island up and left it there; nothing but real scrollers may scroll */
+body { overflow: clip; }
 /* longhands: a bad font name then only loses the family, not the size */
 body {
   font-size: var(--fs); line-height: 1.4; font-family: var(--font); color: var(--fg);
@@ -207,7 +210,12 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 50%; }
   position: absolute; left: 0; top: 0; z-index: 40; min-width: 180px; padding: 5px;
   background: color-mix(in srgb, var(--bg) 88%, var(--fg)); border-radius: var(--r-md);
   box-shadow: var(--shadow-float), inset 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
+  max-height: calc(100% - 8px); overflow-y: auto; /* a tall menu in a short panel scrolls (a real scroller) */
   animation: ctx-in .14s var(--ease);
+}
+/* see-through materials: a glass pane (bg and fg can both be white, e.g. the Liquid glass preset) */
+body:is([data-material=frosted], [data-material=glass]) .ctx {
+  background: color-mix(in srgb, var(--bg) 24%, transparent); backdrop-filter: blur(24px) saturate(1.6);
 }
 @keyframes ctx-in { from { opacity: 0; scale: .96; } }
 .ctx-item {

@@ -72,7 +72,7 @@ body:is([data-style=notch], [data-style=fade]):not(.detached) {
 /* ---------- the island ---------- */
 .island {
   position: absolute; z-index: 1; margin: auto; inset: var(--gap) 0 auto; /* top; other edges below */
-  box-sizing: border-box; overflow: hidden; isolation: isolate;
+  box-sizing: border-box; overflow: clip; isolation: isolate; /* clip: never scrollable (base.css) */
   /* the collapsed alert card is the only in-flow child: it sizes the island and stays on the anchor */
   display: flex; flex-direction: column; justify-content: var(--i-jc); align-items: var(--i-ai);
   interpolate-size: allow-keywords; anchor-name: --island;
@@ -114,7 +114,7 @@ body[data-edge=bottom-right] .island { inset: auto var(--gap) var(--gap) auto; }
 body[data-style=fade] .island:not(.open, .peeking, .alerting) { background-color: var(--i-glow); box-shadow: none; --i-fx: 30%; --i-fy: 100%; }
 body[data-style=line] .island:not(.open, .peeking, .alerting) { background-color: color-mix(in srgb, var(--fg) 80%, transparent); box-shadow: 0 0 0 .5px rgb(0 0 0 / .3); }
 body[data-style=invisible]:not(.detached) .island:not(.open, .peeking, .alerting),
-body.fullscreen:not(.detached) .island:not(.open, .alerting) { opacity: 0; box-shadow: none; }
+body.fullscreen:not(.detached) .island:not(.open, .alerting, .picking) { opacity: 0; box-shadow: none; } /* (the picker's swatch is what you aim with) */
 
 /* fade: a sliver glowing out of the edge, its ends (and inner side) melting into the screen */
 body[data-style=fade]:not(.detached) .island {
@@ -362,6 +362,12 @@ body[data-style] .island.activity:not(.open, .peeking, .alerting)::after { opaci
 .act-eq > i:nth-child(4) { animation-delay: -.2s; }
 .act-eq.paused > i { animation: none; transform: scaleY(.3); }
 @keyframes act-eq { from { transform: scaleY(.22); } to { transform: scaleY(1); } }
+/* HUDs (volume, mic, power): icon, a thin level bar, a value */
+.activity > .act-ico.act-off { color: var(--danger); }
+.activity > .act-ico.act-ok { color: var(--ok); }
+.act-level { display: flex; flex: none; width: 44px; height: 4px; border-radius: 99px; background: var(--surface-2); overflow: clip; }
+.act-level > i { width: var(--v, 0%); border-radius: inherit; background: var(--fg); transition: width .2s var(--ease), height .2s var(--ease); }
+.act-level.off > i { background: var(--muted); }
 /* side docks: a short stacked form */
 body[data-orient=vertical] .island > .activity { flex-direction: column; width: var(--i-cw); height: max-content; max-width: none; max-height: var(--i-amax); padding: 8px 0; gap: 6px; }
 body[data-orient=vertical]:is([data-style=pill], [data-style=notch]):not(.detached, .fullscreen) .island.activity:not(.open, .peeking, .alerting) {
@@ -371,4 +377,6 @@ body[data-orient=vertical] .activity > :is(.act-text, .act-when) { writing-mode:
 body[data-orient=vertical] .activity[data-kind=reminder] > .act-text { display: none; }
 body[data-orient=vertical] .act-eq { flex-direction: column; align-items: center; height: auto; width: 14px; }
 body[data-orient=vertical] .act-eq > i { width: 100%; height: 3px; transform-origin: center; }
+body[data-orient=vertical] .act-level { flex-direction: column-reverse; width: 4px; height: 44px; }
+body[data-orient=vertical] .act-level > i { width: auto; height: var(--v, 0%); }
 @media (prefers-reduced-motion: reduce) { .act-eq > i { animation: none; transform: scaleY(.6); } }

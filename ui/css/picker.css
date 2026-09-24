@@ -1,0 +1,13 @@
+/* Screen colour picker (ui/picker.js): the island's peek while picking. `body` outranks the
+   vertical-dock peek rule, so the swatch row wraps onto two lines there instead of clamping. */
+body .island.picking > .peek {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 8px;
+  line-height: 1.3; white-space: nowrap;
+}
+.island.picking > .peek > b { margin: 0; }
+.pick-swatch {
+  flex: none; width: 16px; height: 16px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / .35), 0 0 0 1px rgb(0 0 0 / .4); /* reads on any colour */
+}
+.pick-hex { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pick-hint { color: var(--muted); font-size: .9em; }

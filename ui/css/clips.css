@@ -94,3 +94,9 @@ section[data-pane="clipboard"] .clips-hint {
   section[data-pane="clipboard"] .clip.enter { animation: none; }
   section[data-pane="clipboard"] .clip:active { scale: none; }
 }
+
+/* the Transform… menu (13 items) in two columns, so it fits a short panel */
+#island:has(section[data-pane="clipboard"].active) .ctx:has(> .ctx-item:nth-of-type(10)) {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2px; max-width: calc(100% - 8px); /* narrow side dock: labels wrap */
+}
+#island:has(section[data-pane="clipboard"].active) .ctx:has(> .ctx-item:nth-of-type(10)) > .ctx-sep { grid-column: 1 / -1; }

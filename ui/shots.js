@@ -1,6 +1,9 @@
 // Screenshots tab: big, crisp previews of the screenshots folder. Click copies, right-click
 // quick-looks, click-and-drag drops the real file into any app, paste / drop adds images.
-import { state, on, h, icon, iconBtn, clamp, call, toast, assetUrl, ago, shell } from './core.js';
+// The ⋯ button (or Shift+F10) has the rest: mark up (M), copy text (T), open, show in Explorer.
+import { state, on, h, icon, iconBtn, clamp, call, toast, assetUrl, ago, shell, menu } from './core.js';
+import { openMarkup } from './markup.js';
+import { copyTextFrom } from './ocr.js';
 
 const cfg = () => state.cfg;
 const MOVES = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
@@ -28,7 +31,8 @@ function fitRect(r, w, hgt) {
 }
 
 // ---------- list ----------
-async function load() {
+/** Refresh from disk; `want` (a file name) gets selected, e.g. a just-saved marked copy. */
+async function load(want) {
   const list = await call('list_shots');
   if (!list) return;
   const key = s => s.path + '|' + s.modified;
@@ -53,8 +57,8 @@ async function load() {
   strip.replaceChildren(...(tiles.length ? tiles
     : [h('div.empty', {}, 'No screenshots yet.', h('br'), 'Press S to snip, or paste / drop an image here.')]));
   captions();
-  const kept = list.findIndex(s => s.name === selName);
-  select(firstNew >= 0 ? firstNew : Math.max(kept, 0), firstNew >= 0 ? 'smooth' : undefined);
+  const kept = list.findIndex(s => s.name === (want ?? selName));
+  select(firstNew >= 0 && !want ? firstNew : Math.max(kept, 0), firstNew >= 0 || want ? 'smooth' : undefined);
 }
 
 function tile(s, key) {
@@ -62,8 +66,8 @@ function tile(s, key) {
   const img = h('img', { alt: '', loading: 'lazy', decoding: 'async', draggable: 'false', src: assetUrl(s.path) });
   return h('figure.tile', {
     role: 'option', 'aria-label': s.name, dataset: { key },
-    title: `${s.name}\nClick: copy · Right-click: quick look · Drag: drop into any app · Double-click: open`,
-  }, img, h('figcaption'), h('span.badge', { html: icon('check') }));
+    title: `${s.name}\nClick: copy · Right-click: quick look · Drag: drop into any app · Double-click: open · M: mark up`,
+  }, img, h('figcaption'), h('span.badge', { html: icon('check') }), moreBtn('more'));
 }
 
 const captions = () => tiles.forEach((t, i) => (t.querySelector('figcaption').textContent = ago(shots[i].modified)));
@@ -87,6 +91,31 @@ function move(k) {
   if (j >= 0 && j < n) select(j, 'smooth');
   else if (k === 'ArrowDown' && Math.floor(sel / cols) < Math.floor((n - 1) / cols)) select(n - 1, 'smooth');
 }
+
+/** ⋯ on a tile / the quick look. Not a tab stop (Shift+F10 opens the same menu). */
+function moreBtn(cls, onclick) {
+  const b = iconBtn('more', 'More (Shift+F10)', onclick, cls);
+  b.tabIndex = -1;
+  return b;
+}
+
+/** The actions menu for shot i, dropped under `at` (an element) or at a mouse event. */
+function shotMenu(i, at) {
+  const s = shots[i];
+  if (!s) return;
+  select(i, 'auto'); // on screen, so the menu drops next to it
+  strip.focus({ preventScroll: true }); // not the clicked ⋯: Enter / Space afterwards must act on the selection
+  menu([
+    { label: 'Copy', icon: 'copy', kbd: 'Enter', run: () => copy(i, lookAt === i ? look : tiles[i]) },
+    { label: 'Mark up', icon: 'pen', kbd: 'M', run: () => openMarkup(s) },
+    { label: 'Copy text', icon: 'scan-text', kbd: 'T', run: () => copyTextFrom(s.path) },
+    'sep',
+    { label: 'Open', icon: 'expand', kbd: 'O', run: () => call('open_shot', { name: s.name }) },
+    { label: 'Show in Explorer', icon: 'folder', kbd: 'R', run: () => call('reveal_shot', { name: s.name }) },
+  ], at);
+}
+
+const markupEl = () => pane.querySelector('.mk:not(.mk-out)');
 
 // ---------- actions ----------
 async function copy(i, fx = tiles[i]) {
@@ -261,14 +290,15 @@ export default {
       const i = at(e);
       if (i < 0) return;
       select(i);
-      press(e, i, tiles[i]);
+      if (!e.target.closest('.more')) press(e, i, tiles[i]);
     });
     strip.addEventListener('click', e => {
-      const i = at(e);
+      const i = at(e), more = e.target.closest('.more');
+      if (more) return shotMenu(i, more);
       if (noClick || e.detail > 1) return void (noClick = false); // after a drag / 2nd click of a double-click
       if (i >= 0) copy(i);
     });
-    strip.addEventListener('dblclick', e => at(e) >= 0 && call('open_shot', { name: shots[at(e)].name }));
+    strip.addEventListener('dblclick', e => at(e) >= 0 && !e.target.closest('.more') && call('open_shot', { name: shots[at(e)].name }));
     strip.addEventListener('contextmenu', e => {
       e.preventDefault();
       if (at(e) >= 0) openLook(at(e));
@@ -289,7 +319,7 @@ export default {
     lookCap = h('div.ql-cap');
     look = h('div.ql', {
       hidden: true,
-      title: 'Click: copy · Drag: drop into any app · ←/→: browse · Right-click / Esc: close',
+      title: 'Click: copy · Drag: drop into any app · ←/→: browse · M: mark up · Right-click / Esc: close',
       onclick: e => {
         if (e.target.closest('button')) return;
         if (noClick) return void (noClick = false);
@@ -302,29 +332,39 @@ export default {
     }, h('div.ql-dim'), lookImg, lookCap, h('span.badge', { html: icon('check') }),
       iconBtn('chevron-left', 'Previous (←)', () => step(-1), 'ql-prev'),
       iconBtn('chevron-right', 'Next (→)', () => step(1), 'ql-next'),
-      iconBtn('x', 'Close (Esc)', () => closeLook(), 'ql-x'));
+      iconBtn('x', 'Close (Esc)', () => closeLook(), 'ql-x'),
+      moreBtn('ql-more', e => shotMenu(lookAt, e.currentTarget)));
 
     pane.append(bar, strip, look);
     // one-shot animation classes (new, sent, copied) clear themselves: keyframes are named shot-<class>
     pane.addEventListener('animationend', e => {
-      const c = e.animationName.replace('shot-', '');
+      if (!e.animationName.startsWith('shot-')) return; // not ours (e.g. the markup editor's mk-out)
+      const c = e.animationName.slice(5);
       e.target.closest?.('.' + c)?.classList.remove(c);
     });
     applyCfg();
     on('config', applyCfg);
+    on('markup-done', saved => {
+      if (saved) load(saved);
+      if (visible()) strip.focus({ preventScroll: true });
+    });
   },
 
   show() {
     applyCfg();
     load();
-    strip.focus({ preventScroll: true });
+    (markupEl() ?? strip).focus({ preventScroll: true });
   },
   hide() { closeLook(true) },
   onOpen() { if (visible()) load() },
   onClose() { closeLook(true) },
 
   keydown(e) {
-    const k = e.key, t = e.target, s = shots[sel], looking = lookAt >= 0, key = k.toLowerCase();
+    const k = e.key, t = e.target, s = shots[sel], looking = lookAt >= 0, key = k.toLowerCase(), mk = markupEl();
+    if (mk) { // the editor has its own keys (they only reach it while it has focus)
+      if (!mk.contains(t)) mk.focus();
+      return false;
+    }
     if (e.ctrlKey || e.altKey || e.metaKey || t.closest?.('input, textarea, select, [contenteditable]')) return false;
     if ((k === 'Enter' || k === ' ') && t.closest?.('button')) return false; // let buttons click
     let done = true;
@@ -336,6 +376,10 @@ export default {
     else if (key === 's') snip();
     else if (key === 'o' && s) call('open_shot', { name: s.name });
     else if (key === 'r' && s) call('reveal_shot', { name: s.name });
+    else if (key === 'm' && s) openMarkup(s);
+    else if (key === 't' && s) copyTextFrom(s.path);
+    else if ((k === 'ContextMenu' || (k === 'F10' && e.shiftKey)) && s)
+      shotMenu(sel, looking ? look.querySelector('.ql-more') : tiles[sel].querySelector('.more'));
     else done = false;
     if (done) e.preventDefault();
     return done;

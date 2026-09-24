@@ -2,11 +2,43 @@
 // pastes it into the window you were in (or copies it; Settings > clipClick, Shift flips it).
 'use strict';
 import { state, on, h, icon, iconBtn, toast, peek, call, listen, assetUrl, ago, clamp, menu } from './core.js';
+import { copyTextFrom } from './ocr.js';
+import { pickColor } from './picker.js';
 
 const FILTERS = [['all', 'All'], ['text', 'Text'], ['image', 'Images'], ['files', 'Files']];
 const rows = new Map(); // clip id -> row, reused across updates so thumbnails don't reload
 let list, search, clearBtn, hint, chips, selEl;
 let clips = [], view = [], sel = 0, selId = null, filter = 'all', armed = 0, heard = false;
+let follow = null; // text a Transform just copied: selected once it lands, so Enter pastes it
+
+/** Text transforms for the Transform… menu, in menu order. Each throws when it doesn't apply. */
+const obj = s => { if (!/^\s*[[{]/.test(s)) throw 0; return JSON.parse(s, (k, v, c) => (typeof v === 'number' ? JSON.rawJSON(c.source) : v)); }; // objects/arrays only; big numbers stay exact
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+export const TRANSFORMS = {
+  UPPERCASE: s => s.toUpperCase(),
+  lowercase: s => s.toLowerCase(),
+  'Title Case': s => s.toLowerCase().replace(/(?<![\p{L}\p{N}'’])\p{L}/gu, c => c.toUpperCase()),
+  'Sentence case': s => s.toLowerCase().replace(/(?:^|[.!?]\s|\n)\s*\p{L}/gu, c => c.toUpperCase()),
+  'Trim whitespace': s => s.split(/\r?\n/).map(l => l.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+  'Join lines': s => s.trim().replace(/\s*\r?\n\s*/g, ' '),
+  'Strip formatting': s => s
+    .replace(/<\/?[a-z][^<>]*>/gi, '') // HTML tags (not "2 < 3 … 5 > 4")
+    .replace(/^[ \t]*(?:#{1,6}[ \t]+|(?:>[ \t]?)+|[-*+•][ \t]+)/gm, '') // headings, quotes, bullets
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // links and images: their text
+    .replace(/\*\*|__|~~|`+/g, '').replace(/(?<![\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/g, '$1') // bold, strike, code, *italic*
+    .replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"').replace(/[  ]/g, ' '),
+  'Pretty JSON': s => JSON.stringify(obj(s), null, 2),
+  'Minify JSON': s => JSON.stringify(obj(s)),
+  'URL encode': s => encodeURIComponent(s),
+  'URL decode': s => decodeURIComponent(s),
+  'Base64 encode': s => new TextEncoder().encode(s).toBase64(),
+  'Base64 decode': s => {
+    const t = s.trim(), out = utf8.decode(Uint8Array.fromBase64(t, { alphabet: /[-_]/.test(t) ? 'base64url' : 'base64' }));
+    if (!t || /[\0-\x08\x0e-\x1f\x7f]/.test(out)) throw 0; // binary, not text
+    return out;
+  },
+};
+const GROUPS = new Set(['Trim whitespace', 'Pretty JSON', 'URL encode', 'Base64 encode']); // a separator before each
 
 const fileName = p => p.split(/[\\/]/).pop() || p;
 const glyph = name => h('span.clip-glyph', { html: icon(name) });
@@ -67,8 +99,10 @@ function render() {
     ...els.slice(p),
     ...(view.length ? [] : [h('div.empty', {}, clips.length ? 'No matches' : 'Copy something and it lands here')]),
   );
-  const i = view.findIndex(c => c.id === selId);
-  select(i >= 0 ? i : sel); // a removed clip hands the selection to the one now in its place
+  const f = follow === null ? -1 : view.findIndex(c => c.kind === 'text' && c.text === follow);
+  if (f >= 0) follow = null;
+  const i = f >= 0 ? f : view.findIndex(c => c.id === selId);
+  select(i >= 0 ? i : sel, f >= 0); // a removed clip hands the selection to the one now in its place
   clearBtn.disabled = !clips.some(c => !c.pinned);
 }
 
@@ -105,8 +139,26 @@ function rowMenu(c, at) {
     ...(pasteFirst ? [paste, copy] : [copy, paste]),
     { label: c.pinned ? 'Unpin' : 'Pin', icon: c.pinned ? 'pin-off' : 'pin', kbd: 'Ctrl+P', run: () => togglePin(c) },
     'sep',
+    c.kind === 'text' && { label: 'Transform…', icon: 'wand', kbd: 'Ctrl+T', run: () => transformMenu(c, at) },
+    c.kind === 'image' && { label: 'Copy text', icon: 'scan-text', run: () => copyTextFrom(c.image) },
+    c.kind !== 'files' && 'sep',
     { label: 'Delete', icon: 'trash', kbd: 'Shift+Del', danger: true, run: () => call('remove_clip', { id: c.id }) },
   ], at);
+}
+
+/** Second menu, same spot: each transform copies its result as a new clip. */
+function transformMenu(c, at) {
+  menu(Object.entries(TRANSFORMS).flatMap(([label, fn]) => {
+    let out;
+    try { out = fn(c.text); } catch { /* doesn't apply: disabled */ }
+    return [GROUPS.has(label) && 'sep', {
+      label, disabled: !out?.trim(), // an empty result would blank the clipboard
+      run: () => {
+        follow = out;
+        call('copy_text', { text: out }).then(r => (r === undefined ? (follow = null) : toast(`Copied as ${label}`)));
+      },
+    }];
+  }), at);
 }
 
 function setFilter(f) {
@@ -141,7 +193,7 @@ function disarm() {
 function updateHint() {
   const [a, b] = state.cfg.clipClick === 'copy' ? ['copy', 'paste'] : ['paste', 'copy'];
   const k = (key, what) => h('span', {}, h('span.kbd', {}, key), ` ${what}`);
-  hint.replaceChildren(k('Enter', a), k('Shift+Enter', b), k('Ctrl+P', 'pin'), k('Shift+Del', 'delete'));
+  hint.replaceChildren(k('Enter', a), k('Shift+Enter', b), k('Ctrl+P', 'pin'), k('Ctrl+T', 'transform'), k('Shift+Del', 'delete'));
 }
 
 function keydown(e) {
@@ -158,6 +210,9 @@ function keydown(e) {
   const c = view[sel];
   if (k === 'Enter' && c) { e.preventDefault(); act(c.id, e.shiftKey); return true; }
   if (e.ctrlKey && k.toLowerCase() === 'p') { e.preventDefault(); if (c) togglePin(c); return true; } // also stops print
+  // Ctrl+T, not T: the search box has the keyboard (type-to-search)
+  if (e.ctrlKey && k.toLowerCase() === 't') { e.preventDefault(); if (c?.kind === 'text') transformMenu(c, selEl); return true; }
+  if ((k === 'ContextMenu' || (k === 'F10' && e.shiftKey)) && c) { e.preventDefault(); rowMenu(c, selEl); return true; }
   if (e.ctrlKey && k.toLowerCase() === 'f') { e.preventDefault(); search.focus(); search.select(); return true; }
   if (k === 'Delete' && e.shiftKey && c) { e.preventDefault(); call('remove_clip', { id: c.id }); return true; }
   // type-to-search: focusing the box during keydown lets this very key land in it
@@ -182,7 +237,8 @@ export default {
     pane.append(
       h('div.clips-bar', {},
         h('label.clips-search', {}, h('span.clips-search-icon', { html: icon('search') }), search),
-        h('div.clips-filters', { role: 'group', 'aria-label': 'Show' }, ...chips, clearBtn)),
+        h('div.clips-filters', { role: 'group', 'aria-label': 'Show' }, ...chips, clearBtn),
+        iconBtn('pipette', 'Pick a colour from the screen', () => pickColor(), 'clips-pick')),
       list,
       hint,
     );
@@ -214,7 +270,7 @@ export default {
   onOpen() {
     // like Win+V: every open starts at the newest clip
     search.value = '';
-    selId = null;
+    selId = follow = null;
     sel = 0;
     render();
     list.scrollTop = 0;

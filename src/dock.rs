@@ -281,7 +281,12 @@ pub(crate) fn set_open_later(app: &AppHandle, open: bool, focus: bool) {
 /// if it already has focus, dock it back and close.
 pub(crate) fn toggle(app: &AppHandle) {
     let st = app.state::<Pad>();
-    let f = focused(app);
+    let w = main_window(app);
+    let min = w.is_minimized().unwrap_or(false);
+    let f = !min && focused(app); // before restoring: restoring activates it, which isn't "already focused"
+    if min {
+        let _ = w.unminimize(); // Win+D / Show desktop hid the pop-out; set_focus ignores iconic windows
+    }
     if !st.detached.load(Relaxed) {
         set_open(app, !(st.open.load(Relaxed) && f), true);
     } else if f {
@@ -292,9 +297,14 @@ pub(crate) fn toggle(app: &AppHandle) {
     }
 }
 
+/// Swap a global hotkey; "" means none. On failure (taken, e.g. by the other crashpad hotkey) the
+/// old one stays.
 pub(crate) fn rebind_hotkey(app: &AppHandle, old: &str, new: &str) -> Res<()> {
     let gs = app.global_shortcut();
     let _ = gs.unregister(old);
+    if new.trim().is_empty() {
+        return Ok(());
+    }
     gs.register(new).map_err(|e| {
         let _ = gs.register(old);
         format!("Can't use hotkey \"{new}\": {e}")
@@ -340,8 +350,8 @@ impl Slam {
     }
 }
 
-/// Shake detector: while a mouse button is held, four quick reversals of horizontal direction
-/// (each leg at least 30 px, all within 700 ms) count as a shake. Fires once per shake.
+/// Shake detector: while a mouse button is held, `need` quick reversals of horizontal direction
+/// (each leg at least `leg` px, all within a second) count as a shake. Fires once per hold.
 #[derive(Default)]
 struct Shake {
     dir: f64,
@@ -351,28 +361,42 @@ struct Shake {
 }
 
 impl Shake {
-    fn step(&mut self, x: f64, held: bool, now: Instant) -> bool {
+    fn step(&mut self, x: f64, held: bool, leg: f64, need: usize, now: Instant) -> bool {
         if !held {
             *self = Self { leg_from: x, ..Default::default() };
             return false;
         }
-        let d = (x - self.leg_from).signum() * f64::from((x - self.leg_from).abs() >= 30.);
-        if d != 0. && d != self.dir {
+        let dx = x - self.leg_from;
+        if self.dir != 0. && dx * self.dir > 0. {
+            self.leg_from = x; // still going the same way: this is the new far end
+        } else if dx.abs() >= leg {
             if self.dir != 0. {
-                self.turns.push(now);
+                self.turns.push(now); // came back 30 px from the far end: a reversal
             }
-            self.dir = d;
+            self.dir = dx.signum();
             self.leg_from = x;
-        } else if d == self.dir && d != 0. {
-            self.leg_from = x - d * 30.; // keep measuring the leg from its far end
         }
-        self.turns.retain(|t| now.duration_since(*t).as_millis() <= 700);
-        if self.turns.len() >= 4 && !self.fired {
+        self.turns.retain(|t| now.duration_since(*t).as_millis() <= 1000);
+        if self.turns.len() >= need && !self.fired {
             self.fired = true; // one open per held button
             return true;
         }
         false
     }
+}
+
+/// Explorer (and most apps) show the shell's drag image while a file drag is running.
+fn file_drag() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, IsWindowVisible};
+    let mut h = None;
+    // a hidden one can linger from an earlier drag, so look at every one
+    while let Ok(w) = unsafe { FindWindowExW(None, h, windows::core::w!("SysDragImage"), None) } {
+        if unsafe { IsWindowVisible(w) }.as_bool() {
+            return true;
+        }
+        h = Some(w);
+    }
+    false
 }
 
 /// Polls the cursor and focus. Opening needs a slam: with the cursor pinned on the edge zone, the
@@ -387,6 +411,7 @@ pub(crate) fn watch_mouse(app: AppHandle) {
     let (mut armed, mut had_focus, mut reached, mut raw_ok) = (true, false, false, true);
     let (mut last_pos, mut fullscreen, mut screen, mut tick) = (cursor().unwrap_or_default(), false, None, 0u32);
     let mut over_alert = false; // cursor over the alert card, which is then the only clickable part
+    let mut bar_through = false; // open quick-capture bar: the window lets clicks through outside it
     let mut shake = Shake::default();
     let ms = |t: Instant| t.elapsed().as_secs_f64() * 1000.;
     loop {
@@ -447,10 +472,18 @@ pub(crate) fn watch_mouse(app: AppHandle) {
                 continue;
             }
             had_focus = has_focus;
+            // quick capture: the page marks the bar (set_interactive) as the only part that takes clicks
+            let bar = if st.interactive.load(Relaxed) { *st.alert_rect.lock().unwrap() } else { None };
+            let through = bar.is_some_and(|r| !Rect { x: geo.win.x + r[0], y: geo.win.y + r[1], w: r[2], h: r[3] }.contains(x, y));
+            if through != bar_through {
+                bar_through = through;
+                set_click_through(&app, through);
+            }
             // a slam far along the edge (zone = whole edge) needs time to travel to the panel
             let inside = geo.hover.contains(x, y);
             reached |= inside;
-            let away = c.collapse_on_leave && !pinned && !has_focus && !inside && (reached || ms(opened_at) > 1500.);
+            // a panel opened for a drag (shake) stays until the button is released away from it
+            let away = c.collapse_on_leave && !pinned && !has_focus && !inside && !mouse_down() && (reached || ms(opened_at) > 1500.);
             match (away, away_since) {
                 (false, _) => away_since = None,
                 (true, None) => away_since = Some(Instant::now()),
@@ -470,9 +503,14 @@ pub(crate) fn watch_mouse(app: AppHandle) {
             }
             over_alert = hot && card.is_some();
             armed |= !at_edge; // the cursor must leave the edge before the next slam counts
-            // shaking a file you're dragging (button held, quick left-right wiggles) opens the Shelf
-            if c.shake_open && shake.step(x, mouse_down(), Instant::now()) && !fullscreen {
+            // shaking a file you're dragging (button held, quick left-right wiggles) opens the Shelf;
+            // a real file drag needs less of it than any other held-button wiggle (selecting, drawing)
+            let held = mouse_down();
+            let scale = screen.map_or(1., |s| f64::from_bits(s.4));
+            let (leg, need) = if held && file_drag() { (16. * scale, 3) } else { (24. * scale, 4) };
+            if c.shake_open && shake.step(x, held, leg, need, Instant::now()) && !fullscreen {
                 let _ = app.emit("shake", ());
+                opened_at = Instant::now();
                 set_open_later(&app, true, false); // never focus mid-drag: it breaks Explorer's drag loop
             }
             let (into, along) = (dx * geo.out.0 + dy * geo.out.1, (dx * geo.out.1 - dy * geo.out.0).abs());
@@ -625,6 +663,9 @@ pub fn set_detached(app: AppHandle, on: bool) -> Res<()> {
     } else {
         if !st.detached.swap(false, Relaxed) {
             return Ok(());
+        }
+        if w.is_minimized().unwrap_or(false) {
+            let _ = w.unminimize(); // an iconic window reports a -32000,-32000 rect
         }
         if w.is_maximized().unwrap_or(false) {
             let _ = w.unmaximize(); // else the docked window would keep the maximized bounds
@@ -844,18 +885,41 @@ mod tests {
         let at = |ms: u64| t + Duration::from_millis(ms);
         let mut s = Shake::default();
         // a slow drag across the screen is not a shake
-        assert!(!(0..40).any(|i| s.step(i as f64 * 20., true, at(i * 16))));
+        assert!(!(0..40).any(|i| s.step(i as f64 * 20., true, 30., 4, at(i * 16))));
         // four quick wiggles of 60 px are
         let mut s = Shake::default();
         let mut fired = false;
         for (i, x) in [0., 60., 0., 60., 0., 60., 0.].iter().enumerate() {
-            fired |= s.step(*x, true, at(i as u64 * 60));
+            fired |= s.step(*x, true, 30., 4, at(i as u64 * 60));
         }
         assert!(fired);
         // and only once while the button stays down; releasing re-arms
-        assert!(!s.step(60., true, at(500)));
-        assert!(!s.step(60., false, at(520)));
+        assert!(!s.step(60., true, 30., 4, at(500)));
+        assert!(!s.step(60., false, 30., 4, at(520)));
         assert!(!s.fired);
+        // a modest 45 px wiggle sampled every 16 ms (5 px steps) after a steady drag also fires
+        let mut s = Shake::default();
+        let (mut x, mut fired, mut i) = (0., false, 0u64);
+        for _ in 0..40 {
+            x += 5.;
+            s.step(x, true, 30., 4, at(i * 16));
+            i += 1;
+        }
+        for leg in 0..6 {
+            for _ in 0..9 {
+                x += if leg % 2 == 0 { -5. } else { 5. };
+                fired |= s.step(x, true, 30., 4, at(i * 16));
+                i += 1;
+            }
+        }
+        assert!(fired, "45 px triangle shake should open");
+        // dragging a file: three relaxed wiggles (~4 per second, 30 px at 150%) are enough
+        let mut s = Shake::default();
+        let fired = [0., 30., 0., 30., 0.].iter().enumerate().any(|(i, x)| s.step(*x, true, 24., 3, at(i as u64 * 240)));
+        assert!(fired, "a relaxed shake while dragging a file");
+        let mut s = Shake::default();
+        let fired = [0., 30., 0., 30., 0.].iter().enumerate().any(|(i, x)| s.step(*x, true, 36., 4, at(i as u64 * 240)));
+        assert!(!fired, "the same wiggle without a file drag");
     }
 
     #[test]

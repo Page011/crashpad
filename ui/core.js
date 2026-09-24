@@ -102,13 +102,14 @@ export function menu(items, at) {
   const box = $('#panel');
   box.append(el);
   menuEl = el;
+  el._back = document.activeElement; // where the keyboard was, to return there on close
   // position inside the panel, flipped away from edges
   const r = box.getBoundingClientRect(), w = el.offsetWidth, hh = el.offsetHeight;
   let x, y;
   if (at instanceof Element) { const b = at.getBoundingClientRect(); x = b.left; y = b.bottom + 4; }
   else { x = at?.clientX ?? at?.x ?? r.left + 8; y = at?.clientY ?? at?.y ?? r.top + 8; }
   x = clamp(x, r.left + 4, r.right - w - 4) - r.left;
-  y = (y + hh > r.bottom - 4 ? y - hh - 4 : y) - r.top;
+  y = clamp((y + hh > r.bottom - 4 ? y - hh - 4 : y) - r.top, 4, r.height - hh - 4); // never past the panel
   el.style.translate = `${Math.max(4, x)}px ${Math.max(4, y)}px`;
   el.querySelector('button:not([disabled])')?.focus();
   const onKey = e => {
@@ -129,10 +130,13 @@ export function menu(items, at) {
 }
 export function closeMenu() {
   if (!menuEl) return;
+  const back = menuEl._back;
   menuEl._off?.();
   menuEl.remove();
   menuEl = null;
+  if (back?.isConnected && document.activeElement === document.body) back.focus({ preventScroll: true });
 }
+for (const t of ['close', 'tab', 'detached']) bus.addEventListener(t, closeMenu); // a menu never outlives its pane
 export const menuOpen = () => !!menuEl;
 
 // ---- implemented by app.js (the shell); feature modules just call them ----

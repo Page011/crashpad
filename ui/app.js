@@ -9,6 +9,8 @@ import shelf from './shelf.js';
 import live from './live.js';
 import settings from './settings.js';
 import { mountActivity } from './activity.js';
+import palette from './palette.js';
+import { mountPicker } from './picker.js';
 
 const mods = [clips, notes, shots, reminders, shelf, live, settings];
 const island = $('#island'), tabs = $('#tabs'), root = document.documentElement, body = document.body;
@@ -299,6 +301,7 @@ document.addEventListener('keydown', e => {
   const k = e.key;
   // WebView2 would reload the page (dropping unsaved notes and the open state)
   if (k === 'F5' || (e.ctrlKey && k.toLowerCase() === 'r')) return e.preventDefault();
+  if (palette.isOpen()) return void palette.keydown(e); // it has the keyboard while it's up
   if (!state.isOpen) {
     if (k === 'Escape') {
       e.preventDefault();
@@ -313,13 +316,19 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     return togglePinned();
   }
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && k.toLowerCase() === 'k') {
+    e.preventDefault();
+    return palette.open();
+  }
   if (k === 'F11') {
     e.preventDefault();
     return shell.setDetached(!state.detached);
   }
-  if (e.ctrlKey && !e.altKey && k >= '1' && k <= String(mods.length) && k.length === 1) {
+  // the physical number row (AZERTY needs Shift for digits, so e.key alone would miss it), else the key (numpad)
+  const digit = /^Digit\d$/.test(e.code) ? +e.code.slice(5) : /^\d$/.test(k) ? +k : 0;
+  if (e.ctrlKey && !e.altKey && !e.shiftKey && digit >= 1 && digit <= mods.length) {
     e.preventDefault();
-    return showTab(mods[k - 1].id);
+    return showTab(mods[digit - 1].id);
   }
   if (e.ctrlKey && k === 'Tab') {
     e.preventDefault();
@@ -334,7 +343,7 @@ document.addEventListener('keydown', e => {
 });
 
 document.addEventListener('paste', e => {
-  if (state.isOpen && run(active(), 'paste', e) === true) e.preventDefault();
+  if (state.isOpen && !palette.isOpen() && run(active(), 'paste', e) === true) e.preventDefault();
 });
 
 // Drops are plain HTML5. Files carry no path in WebView2, so they're handed to Rust
@@ -353,6 +362,10 @@ document.addEventListener('dragend', () => island.classList.remove('dropping'));
 document.addEventListener('drop', e => {
   island.classList.remove('dropping');
   const dt = e.dataTransfer;
+  if (palette.isOpen()) { // modal: text lands in its field, nothing reaches the tab behind it
+    if (dt.files.length || !editable(e.target)) e.preventDefault();
+    return;
+  }
   if (dt.files.length) {
     e.preventDefault();
     const wv = window.chrome?.webview;
@@ -369,14 +382,17 @@ document.addEventListener('drop', e => {
 });
 
 function dropFiles(paths) {
-  if (!paths?.length) return;
+  if (!paths?.length || palette.isOpen()) return; // (a drop that raced the palette opening)
   const m = active();
   if (m.dropFiles) run(m, 'dropFiles', paths);
   else call('copy_text', { text: paths.join('\n') }).then(r => r !== undefined && toast('Paths copied'));
 }
 
+// the page itself never scrolls (html can't be overflow: clip, so guard it here)
+addEventListener('scroll', () => (scrollX || scrollY) && scrollTo(0, 0));
+
 document.addEventListener('mousedown', e => {
-  if (state.isOpen && !state.detached && !island.contains(e.target)) shell.close();
+  if (state.isOpen && !state.detached && !pinnedOpen && !island.contains(e.target)) shell.close();
 });
 
 // ---------- boot ----------
@@ -403,8 +419,11 @@ document.addEventListener('mousedown', e => {
     listen('mode', m => setDetachedUI(!!m?.detached)),
     listen('files-dropped', dropFiles),
     listen('shake', () => (state.isOpen ? showTab('shelf') : (pendingTab = 'shelf'))),
+    listen('capture', () => palette.open({ capture: !state.isOpen })),
   ]);
   mountActivity($('#activity'));
+  palette.mount(island);
+  mountPicker();
   showTab(state.cfg.defaultTab === 'last' ? state.cfg.lastTab : state.cfg.defaultTab);
   body.classList.add('ready');
   const r = await T.core.invoke('ready');

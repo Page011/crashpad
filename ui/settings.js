@@ -153,11 +153,12 @@ function quitButton() {
 
 function shortcuts() {
   const k = (keys, what) => h('div.set-row', {}, h('span.set-label', {}, what), h('span.keys', {}, keys.map(x => h('kbd.kbd', {}, x))));
-  const hot = h('kbd.kbd');
-  syncers.push(c => (hot.textContent = c.hotkey));
+  const hot = h('kbd.kbd'), cap = h('kbd.kbd');
+  syncers.push(c => ((hot.textContent = c.hotkey), (cap.textContent = c.captureHotkey || 'Off')));
   return [
     h('div.set-row', {}, h('span.set-label', {}, 'Open / close from anywhere'), h('span.keys', {}, hot)),
-    k(['Esc'], 'Close the panel'), k(['Ctrl', '1…5'], 'Jump to a tab'), k(['Ctrl', 'Tab'], 'Next tab'),
+    h('div.set-row', {}, h('span.set-label', {}, 'Quick capture from anywhere'), h('span.keys', {}, cap)),
+    k(['Ctrl', 'K'], 'Command palette'), k(['Esc'], 'Close the panel'), k(['Ctrl', '1…7'], 'Jump to a tab'), k(['Ctrl', 'Shift', 'P'], 'Pin the panel open'), k(['Ctrl', 'Tab'], 'Next tab'),
     k(['F11'], 'Pop out / dock back'),
   ];
 }
@@ -205,6 +206,7 @@ export default {
         range('bounce', 'Bounce', 0, .5, .01, v => (v < .01 ? 'none' : (+v).toFixed(2)), { when: c => c.animStyle === 'spring' })),
       group('behaviour', 'Behaviour', 'settings',
         text('hotkey', 'Hotkey', { placeholder: 'Alt+C', hint: 'e.g. Alt+C, Ctrl+Shift+Space' }),
+        text('captureHotkey', 'Quick capture hotkey', { placeholder: 'Off', hint: 'A note, reminder or timer from anywhere; empty = off' }),
         select('defaultTab', 'Open to', [['last', 'Last used tab'], ['clipboard', 'Clipboard'], ['notes', 'Notes'], ['shots', 'Screenshots'], ['reminders', 'Reminders'], ['shelf', 'Shelf'], ['live', 'Live']]),
         toggle('shakeOpen', 'Shake a file you are dragging to open the Shelf'),
         toggle('pillActivities', 'Show music, timers and the next reminder on the pill'),
