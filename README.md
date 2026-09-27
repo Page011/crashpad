@@ -4,6 +4,8 @@ A Dynamic-Island-style scratchpad on the edge of your screen (Windows 11).
 Slam the mouse into it (keep pushing past the edge; just resting there does nothing) or press
 **Alt+C**, and it springs open with:
 
+https://github.com/user-attachments/assets/e22d0080-0d78-4f9a-8841-2797568855d6
+
 - **Clipboard**: a real clipboard manager. It keeps text, images and files across restarts, has pinned clips,
   and clicking a clip pastes it straight into the window you were in. Copies from password managers are skipped.
   Right-click a text clip → Transform… for UPPER/lower/Title case, trim, join lines, strip formatting, pretty or
@@ -20,6 +22,8 @@ Slam the mouse into it (keep pushing past the edge; just resting there does noth
 - **Shelf**: shake a file you're dragging (a few quick left-right wiggles) and the island pops open. Drop files there to park them, then drag
   them out into any app later, copy them, or zip them (the zip lands in Downloads).
 - **Live**: what's playing (with controls), countdown timers ("tea 10 min"), CPU / memory / GPU / disk / network
+
+
   / battery, system volume with mute and mic mute, your PC's specs, and the next reminders. While the panel is
   collapsed the pill shows the live bit that matters: a running timer, the music playing, or a reminder coming up
   within the hour, and briefly the volume when it changes or the battery when you plug in or unplug.
