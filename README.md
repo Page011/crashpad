@@ -45,6 +45,14 @@ and shelf items for a menu (on screenshots, right-click is Quick Look). Settings
 tab or the last one used.
 Left and right docks get a vertical layout.
 
+## Install
+
+Get it from the [Microsoft Store](https://apps.microsoft.com/store/detail/9N7MR0H88LM0?cid=DevShareMCLPCS):
+
+```sh
+winget install --id 9N7MR0H88LM0 --source msstore --exact
+```
+
 ## Run
 
 ```sh
